@@ -5,11 +5,13 @@ load_dotenv(Path(__file__).parent / ".env")
 import os
 import logging
 from typing import Optional, List
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, UploadFile, File, Header, Query, Form
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
 
+import sipp as sipp_mod
+import storage as storage_mod
 from db import db, new_id, now_iso, clean, log_audit
 from auth import (
     hash_password, verify_password, create_access_token, get_current_user,
@@ -116,6 +118,21 @@ class MappingReq(BaseModel):
     date_field: Optional[str] = ""
     case_type: Optional[str] = ""
     mapping_note: Optional[str] = ""
+    numerator_query: Optional[str] = ""
+    denominator_query: Optional[str] = ""
+
+
+class SippConnReq(BaseModel):
+    host: str
+    port: int = 3306
+    database: str
+    username: str
+    password: Optional[str] = ""
+
+
+class SippPullReq(BaseModel):
+    indicator_id: str
+    period_id: str
 
 
 class BusinessRuleReq(BaseModel):
@@ -589,10 +606,177 @@ async def delete_mapping(mapping_id: str, request: Request, user: dict = Depends
     return {"ok": True}
 
 
-@api.post("/sipp/sync")
-async def sipp_sync(request: Request, user: dict = Depends(require_roles(SUPER_ADMIN, ADMIN))):
-    await log_audit(user, "UPDATE", "Sumber Data", "sipp", None, {"action": "sync_attempt"}, client_ip(request))
-    raise HTTPException(status_code=501, detail="Integrasi SIPP (baca-saja) belum diaktifkan. Konfigurasi koneksi MariaDB SIPP diperlukan.")
+async def _get_sipp_cfg():
+    doc = await db.system_settings.find_one({"key": "sipp_connection"})
+    return doc
+
+
+@api.get("/sipp/connection")
+async def get_sipp_connection(user: dict = Depends(require_roles(SUPER_ADMIN, ADMIN))):
+    cfg = await _get_sipp_cfg()
+    if not cfg:
+        return {"configured": False}
+    return {"configured": True, "host": cfg.get("host"), "port": cfg.get("port"),
+            "database": cfg.get("database"), "username": cfg.get("username"),
+            "has_password": bool(cfg.get("password")), "last_tested": cfg.get("last_tested"),
+            "last_status": cfg.get("last_status")}
+
+
+@api.put("/sipp/connection")
+async def save_sipp_connection(body: SippConnReq, request: Request, user: dict = Depends(require_roles(SUPER_ADMIN))):
+    existing = await _get_sipp_cfg()
+    data = body.model_dump()
+    # keep existing password if left blank on update
+    if not data.get("password") and existing and existing.get("password"):
+        data["password"] = existing["password"]
+    await db.system_settings.update_one(
+        {"key": "sipp_connection"},
+        {"$set": {"key": "sipp_connection", **data, "updated_at": now_iso()},
+         "$setOnInsert": {"id": new_id()}}, upsert=True)
+    await log_audit(user, "UPDATE", "Sumber Data", "sipp_connection", None,
+                    {"host": data["host"], "database": data["database"]}, client_ip(request))
+    return {"ok": True}
+
+
+@api.delete("/sipp/connection")
+async def delete_sipp_connection(request: Request, user: dict = Depends(require_roles(SUPER_ADMIN))):
+    await db.system_settings.delete_one({"key": "sipp_connection"})
+    await log_audit(user, "DELETE", "Sumber Data", "sipp_connection", None, None, client_ip(request))
+    return {"ok": True}
+
+
+@api.post("/sipp/test-connection")
+async def sipp_test(request: Request, user: dict = Depends(require_roles(SUPER_ADMIN, ADMIN))):
+    cfg = await _get_sipp_cfg()
+    if not cfg:
+        raise HTTPException(400, "Koneksi SIPP belum dikonfigurasi")
+    try:
+        res = await sipp_mod.test_connection(cfg)
+        await db.system_settings.update_one({"key": "sipp_connection"},
+            {"$set": {"last_tested": now_iso(), "last_status": "OK"}})
+        return res
+    except Exception as e:
+        await db.system_settings.update_one({"key": "sipp_connection"},
+            {"$set": {"last_tested": now_iso(), "last_status": "FAILED"}})
+        raise HTTPException(400, f"Gagal terhubung ke SIPP: {str(e)}")
+
+
+@api.post("/sipp/pull")
+async def sipp_pull(body: SippPullReq, request: Request, user: dict = Depends(require_roles(SUPER_ADMIN, ADMIN))):
+    cfg = await _get_sipp_cfg()
+    if not cfg:
+        raise HTTPException(400, "Koneksi SIPP belum dikonfigurasi. Atur di Sumber Data → Koneksi SIPP.")
+    mapping = await db.data_source_mappings.find_one(
+        {"indicator_id": body.indicator_id, "source_code": "SIPP"})
+    if not mapping or not (mapping.get("numerator_query") or mapping.get("denominator_query")):
+        raise HTTPException(400, "Pemetaan query SIPP (numerator/denominator) belum diatur untuk indikator ini")
+    ind = await db.indicators.find_one({"id": body.indicator_id})
+    period = await db.reporting_periods.find_one({"id": body.period_id})
+    if not ind or not period:
+        raise HTTPException(404, "Indikator/periode tidak ditemukan")
+    if period.get("status") == "Locked" and user["role"] != SUPER_ADMIN:
+        raise HTTPException(400, "Periode terkunci")
+    try:
+        num = await sipp_mod.run_scalar(cfg, mapping["numerator_query"]) if mapping.get("numerator_query") else None
+        den = await sipp_mod.run_scalar(cfg, mapping["denominator_query"]) if mapping.get("denominator_query") else None
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(400, f"Gagal menjalankan query SIPP: {str(e)}")
+
+    existing = await db.indicator_data.find_one({"indicator_id": body.indicator_id, "period_id": body.period_id})
+    entry_patch = {
+        "numerator": {"value": num, "definition": ind.get("numerator_definition"), "source": "SIPP", "input_date": now_iso()[:10]},
+        "denominator": {"value": den, "definition": ind.get("denominator_definition"), "source": "SIPP", "input_date": now_iso()[:10]},
+        "updated_at": now_iso(), "updated_by": f"{user['name']} (SIPP)",
+    }
+    if existing:
+        await db.indicator_data.update_one({"id": existing["id"]}, {"$set": entry_patch})
+        entry_id = existing["id"]
+    else:
+        entry_id = new_id()
+        await db.indicator_data.insert_one({"id": entry_id, "indicator_id": body.indicator_id,
+            "period_id": body.period_id, "status": "draft", "workflow_history": [],
+            "created_by": f"{user['name']} (SIPP)", "created_at": now_iso(), **entry_patch})
+    await log_audit(user, "UPDATE", "Sumber Data", entry_id, None,
+                    {"source": "SIPP", "numerator": num, "denominator": den}, client_ip(request))
+    return {"ok": True, "entry_id": entry_id, "numerator": num, "denominator": den}
+
+
+# ---------------- Supporting Documents ----------------
+@api.post("/data-entries/{entry_id}/documents")
+async def upload_document(entry_id: str, request: Request, file: UploadFile = File(...),
+                          user: dict = Depends(get_current_user)):
+    if not can_edit(user):
+        raise HTTPException(403, "Tidak memiliki akses untuk mengunggah")
+    entry = await db.indicator_data.find_one({"id": entry_id})
+    if not entry:
+        raise HTTPException(404, "Data entry tidak ditemukan")
+    ext = (file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "")
+    if ext not in storage_mod.ALLOWED_EXT:
+        raise HTTPException(400, f"Tipe file tidak diizinkan (.{ext}). Diizinkan: {', '.join(sorted(storage_mod.ALLOWED_EXT))}")
+    data = await file.read()
+    if len(data) > storage_mod.MAX_SIZE:
+        raise HTTPException(400, "Ukuran file melebihi batas 10 MB")
+    doc_id = new_id()
+    path = f"{storage_mod.APP_NAME}/uploads/{entry_id}/{doc_id}.{ext}"
+    content_type = file.content_type or storage_mod.MIME.get(ext, "application/octet-stream")
+    try:
+        result = storage_mod.put_object(path, data, content_type)
+    except Exception as e:
+        raise HTTPException(500, f"Gagal mengunggah file: {str(e)}")
+    rec = {"id": doc_id, "entry_id": entry_id, "indicator_id": entry["indicator_id"],
+           "period_id": entry["period_id"], "storage_path": result["path"],
+           "original_filename": file.filename, "content_type": content_type,
+           "size": result.get("size", len(data)), "is_deleted": False,
+           "uploaded_by": user["name"], "created_at": now_iso()}
+    await db.supporting_documents.insert_one(dict(rec))
+    await log_audit(user, "CREATE", "Dokumen", doc_id, None, {"file": file.filename}, client_ip(request))
+    return clean(rec)
+
+
+@api.get("/data-entries/{entry_id}/documents")
+async def list_documents(entry_id: str, user: dict = Depends(get_current_user)):
+    return clean(await db.supporting_documents.find(
+        {"entry_id": entry_id, "is_deleted": False}).sort("created_at", -1).to_list(100))
+
+
+@api.get("/documents/{doc_id}/download")
+async def download_document(doc_id: str, authorization: str = Header(None), auth: str = Query(None)):
+    from auth import get_jwt_secret, JWT_ALGORITHM
+    import jwt as jwtlib
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+    elif auth:
+        token = auth
+    if not token:
+        raise HTTPException(401, "Tidak terautentikasi")
+    try:
+        jwtlib.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
+    except Exception:
+        raise HTTPException(401, "Token tidak valid")
+    rec = await db.supporting_documents.find_one({"id": doc_id, "is_deleted": False})
+    if not rec:
+        raise HTTPException(404, "Dokumen tidak ditemukan")
+    try:
+        data, ct = storage_mod.get_object(rec["storage_path"])
+    except Exception as e:
+        raise HTTPException(500, f"Gagal mengambil file: {str(e)}")
+    return Response(content=data, media_type=rec.get("content_type", ct),
+                    headers={"Content-Disposition": f'inline; filename="{rec["original_filename"]}"'})
+
+
+@api.delete("/documents/{doc_id}")
+async def delete_document(doc_id: str, request: Request, user: dict = Depends(get_current_user)):
+    if not can_edit(user):
+        raise HTTPException(403, "Tidak memiliki akses")
+    rec = await db.supporting_documents.find_one({"id": doc_id})
+    if not rec:
+        raise HTTPException(404, "Dokumen tidak ditemukan")
+    await db.supporting_documents.update_one({"id": doc_id}, {"$set": {"is_deleted": True}})
+    await log_audit(user, "DELETE", "Dokumen", doc_id, {"file": rec.get("original_filename")}, None, client_ip(request))
+    return {"ok": True}
 
 
 # ---------------- Business Rules ----------------
@@ -816,6 +1000,11 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup():
     await seed_all()
+    try:
+        storage_mod.init_storage()
+        logger.info("Object storage initialized")
+    except Exception as e:
+        logger.error(f"Storage init failed: {e}")
     logger.info("KINTRACK seed complete")
 
 

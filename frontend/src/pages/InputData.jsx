@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Save, Calculator, Send, CheckCheck, Lock, ShieldCheck } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Save, Calculator, Send, CheckCheck, Lock, ShieldCheck, DatabaseZap, Upload, FileText, Trash2, Download, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 import api, { apiError } from "@/lib/api";
 import { useAuth, canEdit, isAdmin } from "@/context/AuthContext";
@@ -27,6 +27,12 @@ export default function InputData() {
   const [form, setForm] = useState({});
   const [calc, setCalc] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [docs, setDocs] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [mapped, setMapped] = useState(false);
+  const fileRef = useRef(null);
+
+  const loadDocs = (id) => api.get(`/data-entries/${id}/documents`).then((r) => setDocs(r.data)).catch(() => setDocs([]));
 
   useEffect(() => {
     api.get("/indicators", { params: { active: true } }).then((r) => setIndicators(r.data));
@@ -41,12 +47,20 @@ export default function InputData() {
 
   useEffect(() => {
     setCalc(null);
+    setDocs([]);
     if (!indId || !periodId) { setEntry(null); setForm({}); return; }
     api.get("/data-entries/one", { params: { indicator_id: indId, period_id: periodId } }).then((r) => {
-      if (r.data) { setEntry(r.data); setForm(r.data); }
+      if (r.data) { setEntry(r.data); setForm(r.data); loadDocs(r.data.id); }
       else { setEntry(null); setForm({}); }
     });
   }, [indId, periodId]);
+
+  useEffect(() => {
+    if (!indId) { setMapped(false); return; }
+    api.get("/mappings", { params: { indicator_id: indId } })
+      .then((r) => setMapped(r.data.some((m) => m.source_code === "SIPP" && (m.numerator_query || m.denominator_query))))
+      .catch(() => setMapped(false));
+  }, [indId]);
 
   const ct = ind?.calculation_type;
   const setNum = (k, field, v) => setForm((f) => ({ ...f, [k]: { ...(f[k] || {}), [field]: v } }));
@@ -87,6 +101,48 @@ export default function InputData() {
     if (!entry) return;
     try { const { data } = await api.post(`/data-entries/${entry.id}/advance`); toast.success(`Status → ${STEP_LABEL[data.status]}`);
       setEntry({ ...entry, status: data.status }); }
+    catch (e) { toast.error(apiError(e)); }
+  };
+
+  const pullSipp = async () => {
+    setSaving(true);
+    try {
+      const { data } = await api.post("/sipp/pull", { indicator_id: indId, period_id: periodId });
+      toast.success(`Data ditarik dari SIPP — Pembilang: ${data.numerator ?? "-"}, Penyebut: ${data.denominator ?? "-"}`);
+      const r = await api.get("/data-entries/one", { params: { indicator_id: indId, period_id: periodId } });
+      setEntry(r.data); setForm(r.data); if (r.data) loadDocs(r.data.id);
+    } catch (e) { toast.error(apiError(e)); }
+    finally { setSaving(false); }
+  };
+
+  const uploadDoc = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    let id = entry?.id;
+    if (!id) { id = await save(); if (!id) return; }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      await api.post(`/data-entries/${id}/documents`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      toast.success("Dokumen terunggah");
+      loadDocs(id);
+    } catch (err) { toast.error(apiError(err)); }
+    finally { setUploading(false); if (fileRef.current) fileRef.current.value = ""; }
+  };
+
+  const downloadDoc = async (doc) => {
+    try {
+      const res = await api.get(`/documents/${doc.id}/download`, { responseType: "blob" });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url; a.download = doc.original_filename; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { toast.error(apiError(e)); }
+  };
+
+  const deleteDoc = async (docId) => {
+    try { await api.delete(`/documents/${docId}`); toast.success("Dokumen dihapus"); if (entry) loadDocs(entry.id); }
     catch (e) { toast.error(apiError(e)); }
   };
 
@@ -186,6 +242,9 @@ export default function InputData() {
                 <div className="flex flex-wrap gap-2 pt-2">
                   <Button onClick={save} disabled={saving} variant="outline" data-testid="input-data-save-button"><Save className="mr-1 h-4 w-4" /> Simpan Draft</Button>
                   <Button onClick={saveAndCalc} disabled={saving} className="bg-[#0F4C3A] hover:bg-[#0B3B2D]" data-testid="input-data-calculate-button"><Calculator className="mr-1 h-4 w-4" /> Simpan & Hitung</Button>
+                  {(ct === "percentage" || ct === "ratio") && mapped && (
+                    <Button onClick={pullSipp} disabled={saving} variant="outline" className="border-amber-500 text-amber-700 hover:bg-amber-50" data-testid="pull-sipp-button"><DatabaseZap className="mr-1 h-4 w-4" /> Tarik dari SIPP</Button>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -228,6 +287,45 @@ export default function InputData() {
                     {entry.status === "approved" && <><Lock className="mr-1 h-4 w-4" /> Kunci</>}
                   </Button>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Supporting Documents */}
+          {entry && (
+            <Card className="mt-4">
+              <CardHeader className="flex-row items-center justify-between pb-2">
+                <CardTitle className="flex items-center gap-2 text-base"><Paperclip className="h-4 w-4 text-emerald-600" />Dokumen Pendukung</CardTitle>
+                {canEdit(user) && (
+                  <div>
+                    <input ref={fileRef} type="file" hidden onChange={uploadDoc} data-testid="document-file-input"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.csv,.txt" />
+                    <Button size="sm" variant="outline" disabled={uploading} onClick={() => fileRef.current?.click()} data-testid="upload-document-button">
+                      <Upload className="mr-1 h-4 w-4" /> {uploading ? "Mengunggah…" : "Unggah"}
+                    </Button>
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent>
+                {docs.length ? (
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {docs.map((d) => (
+                      <div key={d.id} className="flex items-center justify-between py-2" data-testid={`document-row-${d.id}`}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FileText className="h-4 w-4 shrink-0 text-slate-400" />
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium">{d.original_filename}</div>
+                            <div className="text-xs text-slate-400">{(d.size / 1024).toFixed(0)} KB · diunggah oleh {d.uploaded_by}</div>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          <Button size="icon" variant="ghost" onClick={() => downloadDoc(d)} data-testid={`download-document-${d.id}`}><Download className="h-4 w-4" /></Button>
+                          {canEdit(user) && <Button size="icon" variant="ghost" onClick={() => deleteDoc(d.id)} data-testid={`delete-document-${d.id}`}><Trash2 className="h-4 w-4 text-rose-500" /></Button>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="py-4 text-center text-sm text-slate-400">Belum ada dokumen. Unggah bukti pendukung (PDF, gambar, Excel — maks 10 MB).</p>}
               </CardContent>
             </Card>
           )}

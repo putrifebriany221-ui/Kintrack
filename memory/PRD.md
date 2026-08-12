@@ -34,6 +34,11 @@ Production-ready web application for an Indonesian court institution (Pengadilan
 - Full CRUD + calculation + workflow + audit + RBAC verified
 - Professional Indonesian government UI (emerald/amber, Plus Jakarta Sans)
 
+## Implemented (2026-06-12) — SIPP Connector + Document Uploads (iteration_2, 100% pass)
+- **Live SIPP read-only connector** (aiomysql): configurable connection saved via UI (no hardcoded creds), Test Connection, DELETE/reset endpoint. Per-indicator auto-pull where admins write separate numerator & denominator SELECT queries in the mapping UI; pull writes values into the data entry. SELECT-only enforcement (rejects INSERT/UPDATE/DELETE/DROP/multi-statement). Graceful 400 on unreachable DB.
+- **Supporting document uploads** (Emergent object storage): upload PDF/DOCX/XLSX/images (max 10MB, multiple) per data entry; list, download (Bearer or ?auth token), soft-delete. RBAC enforced.
+- Test data cleaned post-testing → pristine definitions-only state.
+
 ## Mocked / Not Enabled
 - SIPP MariaDB read-only integration: intentionally not connected (POST /api/sipp/sync → 501). Mapping configuration UI is functional.
 - Survey per-question scoring UI: index can be entered manually or via respondents; deep survey-question entry form prepared for future survey-app integration.
