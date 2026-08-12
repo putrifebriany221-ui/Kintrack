@@ -1,0 +1,240 @@
+{
+  "application_name": "KINTRACK (Sistem Tracking Kinerja PN Sukadana)",
+  "institution_name": "Pengadilan Negeri Sukadana",
+  "language": "Indonesian (Bahasa Indonesia)",
+  "app_type": "hybrid_fullstack (Data-heavy government admin dashboard / Performance Tracking System)",
+  "design_archetype": "GOVERNMENT & JUDICIAL PRESTIGE (High Density Tactical & Formal Institutional)",
+  "theme_strategy": {
+    "default_mode": "light",
+    "mode_toggle_supported": true,
+    "light_mode_vibe": "Clean, crisp, authoritative, high-trust government portal with deep emerald green header, subtle slate cards, crisp gold accents, and zero-bleed opacity.",
+    "dark_mode_vibe": "Deep obsidian and slate navy background with crisp emerald borders, high-contrast gold badges, and glowing data indicators."
+  },
+  "typography": {
+    "heading_font_family": "Plus Jakarta Sans, sans-serif",
+    "subheading_font_family": "Outfit, sans-serif",
+    "body_font_family": "Inter, system-ui, sans-serif",
+    "monospace_font_family": "JetBrains Mono, Source Code Pro, monospace",
+    "hierarchy": {
+      "page_title": "text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100",
+      "section_title": "text-lg sm:text-xl font-semibold text-slate-800 dark:text-slate-200",
+      "card_title": "text-base font-medium text-slate-700 dark:text-slate-300",
+      "stat_value": "text-3xl sm:text-4xl font-extrabold tracking-tight",
+      "body": "text-sm text-slate-600 dark:text-slate-400 leading-relaxed",
+      "small_label": "text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"
+    },
+    "rules": [
+      "Use Plus Jakarta Sans for primary page headings to give a modern Indonesian institutional feel.",
+      "Never use default raw black text; use slate-900 or slate-800 for high readability.",
+      "All metric values and financial or judicial numbers must use monospace or tabular numbers font-variant (font-mono or font-numeric)."
+    ]
+  },
+  "colors": {
+    "primary": {
+      "deep_emerald": "#0F4C3A",
+      "emerald_hover": "#0B3B2D",
+      "emerald_light": "#E6F4F0",
+      "royal_navy": "#1E293B",
+      "navy_dark": "#0F172A"
+    },
+    "accent": {
+      "court_gold": "#D97706",
+      "gold_light": "#FEF3C7",
+      "gold_border": "#F59E0B"
+    },
+    "status": {
+      "achieved": {
+        "bg": "bg-emerald-50 dark:bg-emerald-950/50",
+        "text": "text-emerald-700 dark:text-emerald-300",
+        "border": "border-emerald-200 dark:border-emerald-800",
+        "badge": "bg-emerald-600 text-white"
+      },
+      "not_achieved": {
+        "bg": "bg-rose-50 dark:bg-rose-950/50",
+        "text": "text-rose-700 dark:text-rose-300",
+        "border": "border-rose-200 dark:border-rose-800",
+        "badge": "bg-rose-600 text-white"
+      },
+      "warning_pending": {
+        "bg": "bg-amber-50 dark:bg-amber-950/50",
+        "text": "text-amber-700 dark:text-amber-300",
+        "border": "border-amber-200 dark:border-amber-800",
+        "badge": "bg-amber-500 text-white"
+      },
+      "draft_uncalculated": {
+        "bg": "bg-slate-100 dark:bg-slate-800",
+        "text": "text-slate-700 dark:text-slate-300",
+        "border": "border-slate-300 dark:border-slate-700",
+        "badge": "bg-slate-500 text-white"
+      }
+    },
+    "neutrals": {
+      "page_bg_light": "#F8FAFC",
+      "card_bg_light": "#FFFFFF",
+      "border_light": "#E2E8F0",
+      "page_bg_dark": "#0B0F17",
+      "card_bg_dark": "#161E2E",
+      "border_dark": "#2A364F"
+    },
+    "forbidden_colors": [
+      "#7351B7",
+      "#1B93A4",
+      "pure transparent headers with content underneath"
+    ]
+  },
+  "layout_and_navigation": {
+    "header": {
+      "style": "Institutional Top Banner combined with sticky sub-header",
+      "top_bar_bg": "bg-[#0F4C3A] text-white",
+      "main_nav_bg": "bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800",
+      "sticky_z_index": "z-40",
+      "logo_text": "KINTRACK PN SUKADANA",
+      "subtitle": "Sistem Tracking Kinerja Pengadilan Negeri Sukadana"
+    },
+    "nav_items": [
+      { "id": "dashboard", "label": "Dashboard", "path": "/dashboard", "icon": "LayoutDashboard" },
+      { "id": "indikator", "label": "Indikator", "path": "/indikator", "icon": "Target" },
+      { "id": "input-data", "label": "Input Data", "path": "/input-data", "icon": "FileSpreadsheet" },
+      { "id": "perhitungan", "label": "Perhitungan", "path": "/perhitungan", "icon": "Calculator" },
+      { "id": "penanggung-jawab", "label": "Penanggung Jawab", "path": "/penanggung-jawab", "icon": "UserCheck" },
+      { "id": "periode", "label": "Periode", "path": "/periode", "icon": "Calendar" },
+      { "id": "sumber-data", "label": "Sumber Data", "path": "/sumber-data", "icon": "Database" },
+      { "id": "laporan", "label": "Laporan", "path": "/laporan", "icon": "Printer" },
+      { "id": "audit-log", "label": "Audit Log", "path": "/audit-log", "icon": "History" },
+      { "id": "pengguna", "label": "Pengguna", "path": "/pengguna", "icon": "Users" },
+      { "id": "pengaturan", "label": "Pengaturan", "path": "/pengaturan", "icon": "Settings" }
+    ]
+  },
+  "modules_and_features": {
+    "dashboard": {
+      "summary_cards": [
+        "Total Indikator (17 Indikator Utama)",
+        "Tercapai Target (Status TERCAPAI)",
+        "Belum Tercapai (Status BELUM TERCAPAI)",
+        "Belum Dihitung / Draft"
+      ],
+      "charts": [
+        "Capaian Kinerja per Kelompok Indikator (Bar Chart)",
+        "Tren Capaian Kinerja Triwulan (Line Chart)",
+        "Distribusi Status Approval (Pie/Donut Chart)"
+      ],
+      "tables": [
+        "Ringkasan Indikator Kinerja Utama (IKU)",
+        "Kinerja per Penanggung Jawab / Penanggungjawab"
+      ],
+      "filters": [
+        "Tahun Anggaran (2024, 2025, 2026)",
+        "Periode Reporting (Triwulan I - IV, Semestral, Tahunan)",
+        "Kelompok Indikator (Kepaniteraan, Kesekretariatan, Pelayanan Publik, Pelanggaran)",
+        "Penanggung Jawab",
+        "Status Approval"
+      ]
+    },
+    "indikator_master": {
+      "indicator_count": 17,
+      "indicator_types": [
+        "Persentase (Numerator / Denominator)",
+        "Indeks Komposit (Weighted Sub-components)",
+        "Indeks Survei (SKM / SPKP scale 1-4 or 1-100)",
+        "Nilai Manual (Direct Score / Score Target)"
+      ],
+      "capabilities": [
+        "Search & filter indicators",
+        "Add / Edit / Detail indicator configuration",
+        "Set target, unit (%), score, formula expression, weighted sub-components",
+        "Map to SIPP data source or internal log"
+      ]
+    },
+    "input_data": {
+      "dynamic_forms": "Form fields dynamically adapt according to indicator type: Percentage (pembilang & penyebut), Composite (multi-component values & auto-weights), Survey (skor survei & jumlah responden), Manual (nilai aktual & catatan)",
+      "evidence_upload_simulation": "Supports file evidence upload / lampiran pendukung",
+      "approval_trigger": "Draft saving vs Submit for Approval"
+    },
+    "perhitungan": {
+      "engine_features": [
+        "Automated recalculation of all 17 indicators with gap calculation (Capaian = Realisasi / Target * 100%)",
+        "Composite index detail drawer showing breakdown of weight contributions",
+        "Status Badges: TERCAPAI (≥100%), TERLAMPAI (>105%), BELUM TERCAPAI (<100%), BELUM DIHITUNG",
+        "Approval timeline step tracker: Draft → Submitted (Diajukan) → Verified (Diverifikasi) → Approved (Disetujui) → Locked (Dikunci)"
+      ]
+    },
+    "penanggung_jawab": {
+      "officer_roles": [
+        "Panitera (Kepaniteraan Perdata / Pidana / Hukum)",
+        "Sekretaris (Kesekretariatan / Kepegawaian / Keuangan)",
+        "Hakim Pengawas Bidang",
+        "Ketua PN Sukadana"
+      ]
+    },
+    "periode": {
+      "period_types": ["Triwulan I", "Triwulan II", "Triwulan III", "Triwulan IV", "Semester 1", "Semester 2", "Tahunan 2026"],
+      "lock_mechanism": "Lock/Unlock period toggle with confirmation modal and administrative security badge"
+    },
+    "sumber_data": {
+      "sipp_mapping": "Mapping configuration between KINTRACK KPIs and SIPP (Sistem Informasi Penelusuran Perkara) database tables/APIs e.g., perkara_masuk, perkara_putus, minutasi_terlambat, e-court_ratio"
+    },
+    "laporan": {
+      "export_options": ["Cetak Laporan (Print View)", "Export PDF (Formatted Official Document)", "Export Excel (XLSX Data Dump)"],
+      "templates": ["Laporan Kinerja Instansi Pemerintah (LKjIP)", "Laporan Capaian IKU Triwulanan", "Matriks Penanggung Jawab"]
+    },
+    "audit_log": {
+      "log_columns": ["Waktu", "Pengguna", "Peran", "Aksi / Aktivitas", "Modul / Indikator", "IP Address", "Detail Perubahan"],
+      "filter_by": "Aktivitas, Pengguna, Rentang Tanggal"
+    }
+  },
+  "image_urls": {
+    "court_gavel": {
+      "url": "https://images.unsplash.com/photo-1618771623063-6c3faa854a61?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODd8MHwxfHNlYXJjaHwyfHxjb3VydHJvb20lMjBqdXN0aWNlJTIwbGF3JTIwZG9jdW1lbnR8ZW58MHx8fHwxNzg2NTI1NjU4fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Palu Hakim & Buku Hukum - Official Government Judicial Background",
+      "usage": "Login Screen Side Visual & Header Official Seal Banner"
+    },
+    "courtroom_interior": {
+      "url": "https://images.unsplash.com/photo-1568092806323-8ec13dfa9b92?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODd8MHwxfHNlYXJjaHw0fHxjb3VydHJvb20lMjBqdXN0aWNlJTIwbGF3JTIwZG9jdW1lbnR8ZW58MHx8fHwxNzg2NTI1NjU4fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Ruang Sidang Pengadilan",
+      "usage": "About institutional background image overlay"
+    },
+    "lady_justice": {
+      "url": "https://images.unsplash.com/photo-1589994965851-a8f479c573a9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODd8MHwxfHNlYXJjaHwxfHxjb3VydHJvb20lMjBqdXN0aWNlJTIwbGF3JTIwZG9jdW1lbnR8ZW58MHx8fHwxNzg2NTI1NjU4fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Patung Dewi Keadilan (Scale of Justice)",
+      "usage": "LKjIP report cover page header"
+    },
+    "officer_avatar_1": {
+      "url": "https://images.unsplash.com/photo-1746640546257-282229e53fd8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTF8MHwxfHNlYXJjaHwyfHxpbmRvbmVzaWFuJTIwZ292ZXJubWVudCUyMG9mZmljZXIlMjBwb3J0cmFpdCUyMGVtcGxveWVlfGVufDB8fHx8MTc4NjUyNTY2Mnww&ixlib=rb-4.1.0&q=85",
+      "description": "Foto Penanggung Jawab Kinerja",
+      "usage": "Profile avatars in Penanggung Jawab module"
+    }
+  },
+  "testing_and_accessibility": {
+    "data_testid_rule": "MANDATORY: Every interactive element, filter input, button, table row, badge, calculation trigger, and modal MUST contain a kebab-case data-testid attribute.",
+    "sample_data_testids": [
+      "data-testid='nav-dashboard-link'",
+      "data-testid='nav-indikator-link'",
+      "data-testid='nav-input-data-link'",
+      "data-testid='nav-perhitungan-link'",
+      "data-testid='filter-year-select'",
+      "data-testid='filter-period-select'",
+      "data-testid='indicator-table-row-1'",
+      "data-testid='recalculate-all-button'",
+      "data-testid='input-data-submit-button'",
+      "data-testid='approval-submit-button'",
+      "data-testid='approval-verify-button'",
+      "data-testid='approval-approve-button'",
+      "data-testid='period-lock-toggle'",
+      "data-testid='export-pdf-button'",
+      "data-testid='export-excel-button'",
+      "data-testid='sipp-sync-button'",
+      "data-testid='login-username-input'",
+      "data-testid='login-password-input'",
+      "data-testid='login-submit-button'"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Ensure all primary UI components use Indonesian Bahasa labels exactly as requested in the problem statement.",
+    "Structure the dashboard using Bento / High-Density Grid layout for data metrics and indicators.",
+    "Make sure the 17 performance indicators represent real Indonesian District Court IKU metrics (e.g., Persentase Perkara Pidana Diselesaikan Tepat Waktu, Indeks Kepuasan Masyarakat / SKM, Persentase Perkara e-Court, Persentase Minutasi Perkara Tepat Waktu, Penyerapan Anggaran DIPA 01 & DIPA 04, Indeks Kinerja Pelayanan Publik, etc.).",
+    "Include mock data that is realistic and complete so calculations, gaps, charts, and report exports look fully populated.",
+    "Ensure Sonner toasts are implemented for all actions (Save, Submit, Verify, Approve, Lock, Export, Sync SIPP).",
+    "Validate that all interactive controls have explicit hover/focus text colors and WCAG compliant background contrasts.",
+    "DO NOT use raw transparent backgrounds in sticky nav or dropdown overlays; always use solid/backdrop-blur-xl with border."
+  ]
+}
