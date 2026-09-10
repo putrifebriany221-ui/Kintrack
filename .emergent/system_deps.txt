@@ -1,1 +1,3 @@
 cron=3.0pl1-162
+imagemagick=8:6.9.11.60+dfsg-1.6+deb12u13
+xauth=1:1.1.2-1

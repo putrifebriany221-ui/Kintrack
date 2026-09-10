@@ -1,0 +1,84 @@
+{
+  "name": "kintrack-desktop",
+  "productName": "KINTRACK",
+  "version": "1.0.0",
+  "description": "KINTRACK - Sistem Tracking Kinerja PN Sukadana (Windows Desktop)",
+  "author": {
+    "name": "Pengadilan Negeri Sukadana",
+    "email": "putrifebriany221@gmail.com"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "cross-env KINTRACK_DEV=1 electron .",
+    "prepare-renderer": "node scripts/copy-renderer.js",
+    "make-icon": "node scripts/make-icon.js",
+    "dist:win": "npm run prepare-renderer && npm run make-icon && electron-builder --win nsis portable --x64",
+    "dist:win:installer": "npm run prepare-renderer && npm run make-icon && electron-builder --win nsis --x64",
+    "pack": "npm run prepare-renderer && electron-builder --dir"
+  },
+  "dependencies": {
+    "electron-log": "5.2.0",
+    "electron-updater": "6.3.9"
+  },
+  "devDependencies": {
+    "cross-env": "7.0.3",
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8",
+    "png-to-ico": "2.1.8"
+  },
+  "build": {
+    "appId": "id.go.pn-sukadana.kintrack",
+    "productName": "KINTRACK",
+    "copyright": "Copyright © 2026 Pengadilan Negeri Sukadana",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "static-server.js",
+      "window-state.js",
+      "package.json",
+      "renderer/**/*"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "build/icon.ico",
+      "executableName": "KINTRACK",
+      "artifactName": "KINTRACK-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "KINTRACK-${version}-portable.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "KINTRACK",
+      "uninstallDisplayName": "KINTRACK - Sistem Tracking Kinerja PN Sukadana",
+      "runAfterFinish": true,
+      "artifactName": "KINTRACK-Setup-${version}.${ext}",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://updates.pn-sukadana.go.id/kintrack/",
+        "channel": "latest"
+      }
+    ]
+  }
+}
