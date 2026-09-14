@@ -89,3 +89,4 @@ credentials.json
 .credentials
 frontend/node_modules/.cache/default-development/0.pack
 desktop/node_modules/electron/dist/electron
+desktop/dist/win-unpacked/KINTRACK.exe

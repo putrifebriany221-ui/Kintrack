@@ -16,6 +16,33 @@ real Windows 11 desktop application, **without changing any existing feature**.
 
 ---
 
+## ⚠️ HOW TO GET THE INSTALLER `.exe` (read this first)
+
+This Emergent build container runs on **ARM64 Linux**. Electron/electron-builder can
+package the app here (the folder `desktop/dist/win-unpacked/` with a runnable
+`KINTRACK.exe` is produced), but the **final `.exe` installer cannot be generated here**
+because stamping the icon and building the NSIS installer require executing x86‑64
+Windows tools under Wine, which ARM64 cannot run. This is an environment limitation,
+not a project problem.
+
+**Recommended (no Node/Python needed on your PC): build via GitHub Actions.**
+A ready workflow is included at `.github/workflows/windows-build.yml`. It compiles the
+real installer on a Windows runner and gives you a downloadable `.exe`:
+
+1. In Emergent, click **Save to GitHub** (push this project to a GitHub repo).
+2. On GitHub, open the **Actions** tab → workflow **"Build Windows Installer (KINTRACK)"**
+   → it runs automatically on push (or click **Run workflow**).
+3. When the green check appears, open that run → **Artifacts** → download
+   **`KINTRACK-Windows`** (contains `KINTRACK-Setup-1.0.0.exe` + the portable exe).
+   *(Tip: push a tag like `v1.0.0` to also get a GitHub Release with the exe attached.)*
+
+**Alternative: build on any Windows 11 PC** (see Section 3) with one command:
+`yarn build` in `frontend`, then `yarn install && yarn dist:win` in `desktop`.
+
+Either path yields `KINTRACK-Setup-1.0.0.exe` → download → double‑click → install.
+
+---
+
 ## 1. Architecture
 
 ```
