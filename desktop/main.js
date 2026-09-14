@@ -205,6 +205,50 @@ ipcMain.handle("app:getInfo", () => ({
   backend: BACKEND_ORIGIN,
 }));
 
+// ---------------- Direct SIPP (MariaDB) access from the LAN desktop app ----------------
+let mysql = null;
+try { mysql = require("mysql2/promise"); } catch (e) { log.warn("mysql2 unavailable:", e?.message); }
+
+const SIPP_FORBIDDEN = /\b(insert|update|delete|drop|alter|create|truncate|replace|grant|revoke|call|lock|unlock|set|use|load|handler|do|rename)\b/i;
+
+function validateSippQuery(sql) {
+  const q = (sql || "").trim().replace(/;$/, "").trim();
+  if (!q) throw new Error("Query kosong");
+  if (!/^(select|with)\b/i.test(q)) throw new Error("Hanya query SELECT yang diizinkan (baca-saja)");
+  if (/;\s*\S/.test(q)) throw new Error("Query ganda tidak diizinkan");
+  if (SIPP_FORBIDDEN.test(q)) throw new Error("Query mengandung perintah yang tidak diizinkan (baca-saja)");
+  return q;
+}
+
+async function sippConnect(cfg) {
+  if (!mysql) throw new Error("Driver mysql2 tidak tersedia di aplikasi desktop");
+  return mysql.createConnection({
+    host: cfg.host, port: Number(cfg.port) || 3306,
+    user: cfg.username, password: cfg.password || "", database: cfg.database,
+    connectTimeout: 8000,
+  });
+}
+
+ipcMain.handle("sipp:test", async (_e, cfg) => {
+  const conn = await sippConnect(cfg);
+  try {
+    const [rows] = await conn.query("SELECT VERSION() AS v");
+    return { ok: true, server_version: rows[0]?.v || "unknown", mode: "desktop-lan" };
+  } finally { await conn.end(); }
+});
+
+ipcMain.handle("sipp:query", async (_e, cfg, sql) => {
+  const q = validateSippQuery(sql);
+  const conn = await sippConnect(cfg);
+  try {
+    const [rows] = await conn.query(q);
+    if (!rows || !rows.length) return null;
+    const val = Object.values(rows[0])[0];
+    const num = Number(val);
+    return Number.isNaN(num) ? val : num;
+  } finally { await conn.end(); }
+});
+
 app.setAppUserModelId("id.go.pn-sukadana.kintrack");
 
 app.whenReady().then(async () => {

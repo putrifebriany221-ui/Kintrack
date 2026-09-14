@@ -92,3 +92,4 @@ desktop/node_modules/electron/dist/electron
 desktop/dist/win-unpacked/KINTRACK.exe
 KINTRACK-Windows-x64.zip
 frontend/node_modules/.cache/default-development/1.pack
+frontend/node_modules/.cache/default-development/4.pack

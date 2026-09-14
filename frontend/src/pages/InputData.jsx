@@ -107,8 +107,26 @@ export default function InputData() {
   const pullSipp = async () => {
     setSaving(true);
     try {
-      const { data } = await api.post("/sipp/pull", { indicator_id: indId, period_id: periodId });
-      toast.success(`Data ditarik dari SIPP — Pembilang: ${data.numerator ?? "-"}, Penyebut: ${data.denominator ?? "-"}`);
+      if (window.kintrack?.sippQuery) {
+        // Desktop app: query SIPP directly from the local network, then store results
+        const { data: mappings } = await api.get("/mappings", { params: { indicator_id: indId } });
+        const m = mappings.find((x) => x.source_code === "SIPP" && (x.numerator_query || x.denominator_query));
+        if (!m) { toast.error("Pemetaan query SIPP (numerator/denominator) belum diatur untuk indikator ini"); return; }
+        const { data: cfg } = await api.get("/sipp/connection/full");
+        let num = null, den = null;
+        try {
+          if (m.numerator_query) num = await window.kintrack.sippQuery(cfg, m.numerator_query);
+          if (m.denominator_query) den = await window.kintrack.sippQuery(cfg, m.denominator_query);
+        } catch (qe) {
+          toast.error((qe?.message || String(qe)).replace(/^Error invoking remote method '.*?': Error: /, ""));
+          return;
+        }
+        await api.post("/sipp/pull-values", { indicator_id: indId, period_id: periodId, numerator: num, denominator: den });
+        toast.success(`Data ditarik dari SIPP (desktop) — Pembilang: ${num ?? "-"}, Penyebut: ${den ?? "-"}`);
+      } else {
+        const { data } = await api.post("/sipp/pull", { indicator_id: indId, period_id: periodId });
+        toast.success(`Data ditarik dari SIPP — Pembilang: ${data.numerator ?? "-"}, Penyebut: ${data.denominator ?? "-"}`);
+      }
       const r = await api.get("/data-entries/one", { params: { indicator_id: indId, period_id: periodId } });
       setEntry(r.data); setForm(r.data); if (r.data) loadDocs(r.data.id);
     } catch (e) { toast.error(apiError(e)); }

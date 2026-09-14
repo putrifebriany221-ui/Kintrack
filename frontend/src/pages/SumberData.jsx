@@ -54,8 +54,23 @@ export default function SumberData() {
   };
   const testConn = async () => {
     setTesting(true);
-    try { const { data } = await api.post("/sipp/test-connection"); toast.success(`Terhubung! MariaDB ${data.server_version}, ${data.table_count} tabel`); loadConn(); }
-    catch (e) { toast.error(apiError(e)); }
+    try {
+      if (window.kintrack?.sippTest) {
+        // Desktop app: connect directly from this machine (works for LAN IPs like 10.x.x.x)
+        const { data: cfg } = await api.get("/sipp/connection/full");
+        const res = await window.kintrack.sippTest(cfg);
+        toast.success(`Terhubung langsung (desktop) ke MariaDB ${res.server_version}`);
+      } else {
+        const { data } = await api.post("/sipp/test-connection");
+        toast.success(`Terhubung! MariaDB ${data.server_version}, ${data.table_count} tabel`);
+      }
+      loadConn();
+    } catch (e) {
+      const msg = window.kintrack
+        ? (e?.message || String(e)).replace(/^Error invoking remote method '.*?': Error: /, "")
+        : apiError(e);
+      toast.error(msg);
+    }
     finally { setTesting(false); }
   };
   const resetConn = async () => {

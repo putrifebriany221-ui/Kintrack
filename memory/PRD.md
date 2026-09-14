@@ -34,6 +34,11 @@ Production-ready web application for an Indonesian court institution (Pengadilan
 - Full CRUD + calculation + workflow + audit + RBAC verified
 - Professional Indonesian government UI (emerald/amber, Plus Jakarta Sans)
 
+## Implemented (2026-09-14) — SIPP LAN fix + Desktop direct connection (iteration_3, 100% pass)
+- **Bug fix (user report: error 2003 to 10.0.x.x)**: root cause = cloud backend cannot reach private LAN IPs. Fix: desktop app (Electron) now connects DIRECTLY to SIPP from the user's LAN machine via IPC + mysql2 (`main.js` handlers `sipp:test`/`sipp:query`, SELECT-only enforced; exposed via `preload.js` as `window.kintrack`). Browser falls back to backend gracefully.
+- New backend endpoints: `GET /api/sipp/connection/full` (admin-only, full config for desktop client), `POST /api/sipp/pull-values` (stores values queried by desktop app). Clear Indonesian error messages for 2003/2013/1045/1049.
+- Windows zip repackaged at `/app/KINTRACK-Windows-x64.zip` (mysql2 bundled, 77 entries in app.asar). User's real SIPP config (10.10.0.2:3306/sipp) preserved.
+
 ## Implemented (2026-06-12) — SIPP Connector + Document Uploads (iteration_2, 100% pass)
 - **Live SIPP read-only connector** (aiomysql): configurable connection saved via UI (no hardcoded creds), Test Connection, DELETE/reset endpoint. Per-indicator auto-pull where admins write separate numerator & denominator SELECT queries in the mapping UI; pull writes values into the data entry. SELECT-only enforcement (rejects INSERT/UPDATE/DELETE/DROP/multi-statement). Graceful 400 on unreachable DB.
 - **Supporting document uploads** (Emergent object storage): upload PDF/DOCX/XLSX/images (max 10MB, multiple) per data entry; list, download (Bearer or ?auth token), soft-delete. RBAC enforced.

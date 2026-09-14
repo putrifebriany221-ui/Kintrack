@@ -135,6 +135,30 @@ class SippPullReq(BaseModel):
     period_id: str
 
 
+class SippPullValuesReq(BaseModel):
+    indicator_id: str
+    period_id: str
+    numerator: Optional[float] = None
+    denominator: Optional[float] = None
+
+
+def _conn_error_message(e: Exception) -> str:
+    msg = str(e)
+    if "2003" in msg or "Connect call failed" in msg or "Errno 111" in msg or "Connection refused" in msg.lower():
+        return ("Tidak dapat terhubung ke server SIPP (error 2003 / host tidak terjangkau). "
+                "Kemungkinan penyebab: (1) alamat IP bersifat internal (10.x.x.x / 192.168.x.x) sehingga tidak bisa "
+                "dijangkau dari server cloud — gunakan aplikasi desktop KINTRACK di dalam jaringan pengadilan; "
+                "(2) MariaDB tidak berjalan atau hanya listen di 127.0.0.1 (atur bind-address); "
+                "(3) port 3306 diblokir firewall; (4) port/IP salah.")
+    if "2013" in msg or "timed out" in msg.lower() or "timeout" in msg.lower():
+        return "Koneksi ke SIPP kehabisan waktu (timeout). Periksa jaringan, VPN, atau firewall."
+    if "1045" in msg:
+        return "Kredensial SIPP salah (error 1045). Periksa username dan password."
+    if "1049" in msg:
+        return "Database tidak ditemukan (error 1049). Periksa nama database."
+    return f"Gagal terhubung ke SIPP: {msg}"
+
+
 class BusinessRuleReq(BaseModel):
     code: str
     name: str
@@ -659,6 +683,19 @@ async def delete_sipp_connection(request: Request, user: dict = Depends(require_
     return {"ok": True}
 
 
+@api.get("/sipp/connection/full")
+async def get_sipp_connection_full(user: dict = Depends(require_roles(SUPER_ADMIN, ADMIN))):
+    """Full config (incl. password) for the authenticated admin — used by the
+    DESKTOP app to connect to SIPP directly from the local network (the cloud
+    server cannot reach private LAN addresses like 10.x.x.x)."""
+    cfg = await _get_sipp_cfg()
+    if not cfg:
+        raise HTTPException(400, "Koneksi SIPP belum dikonfigurasi")
+    return {"host": cfg.get("host"), "port": cfg.get("port") or 3306,
+            "database": cfg.get("database"), "username": cfg.get("username"),
+            "password": cfg.get("password") or ""}
+
+
 @api.post("/sipp/test-connection")
 async def sipp_test(request: Request, user: dict = Depends(require_roles(SUPER_ADMIN, ADMIN))):
     cfg = await _get_sipp_cfg()
@@ -672,7 +709,33 @@ async def sipp_test(request: Request, user: dict = Depends(require_roles(SUPER_A
     except Exception as e:
         await db.system_settings.update_one({"key": "sipp_connection"},
             {"$set": {"last_tested": now_iso(), "last_status": "FAILED"}})
-        raise HTTPException(400, f"Gagal terhubung ke SIPP: {str(e)}")
+        raise HTTPException(400, _conn_error_message(e))
+
+
+async def _store_pull(indicator_id: str, period_id: str, num, den, user, request, source="SIPP"):
+    ind = await db.indicators.find_one({"id": indicator_id})
+    period = await db.reporting_periods.find_one({"id": period_id})
+    if not ind or not period:
+        raise HTTPException(404, "Indikator/periode tidak ditemukan")
+    if period.get("status") == "Locked" and user["role"] != SUPER_ADMIN:
+        raise HTTPException(400, "Periode terkunci")
+    existing = await db.indicator_data.find_one({"indicator_id": indicator_id, "period_id": period_id})
+    entry_patch = {
+        "numerator": {"value": num, "definition": ind.get("numerator_definition"), "source": source, "input_date": now_iso()[:10]},
+        "denominator": {"value": den, "definition": ind.get("denominator_definition"), "source": source, "input_date": now_iso()[:10]},
+        "updated_at": now_iso(), "updated_by": f"{user['name']} ({source})",
+    }
+    if existing:
+        await db.indicator_data.update_one({"id": existing["id"]}, {"$set": entry_patch})
+        entry_id = existing["id"]
+    else:
+        entry_id = new_id()
+        await db.indicator_data.insert_one({"id": entry_id, "indicator_id": indicator_id,
+            "period_id": period_id, "status": "draft", "workflow_history": [],
+            "created_by": f"{user['name']} ({source})", "created_at": now_iso(), **entry_patch})
+    await log_audit(user, "UPDATE", "Sumber Data", entry_id, None,
+                    {"source": source, "numerator": num, "denominator": den}, client_ip(request))
+    return entry_id
 
 
 @api.post("/sipp/pull")
@@ -685,36 +748,24 @@ async def sipp_pull(body: SippPullReq, request: Request, user: dict = Depends(re
     if not mapping or not (mapping.get("numerator_query") or mapping.get("denominator_query")):
         raise HTTPException(400, "Pemetaan query SIPP (numerator/denominator) belum diatur untuk indikator ini")
     ind = await db.indicators.find_one({"id": body.indicator_id})
-    period = await db.reporting_periods.find_one({"id": body.period_id})
-    if not ind or not period:
-        raise HTTPException(404, "Indikator/periode tidak ditemukan")
-    if period.get("status") == "Locked" and user["role"] != SUPER_ADMIN:
-        raise HTTPException(400, "Periode terkunci")
     try:
         num = await sipp_mod.run_scalar(cfg, mapping["numerator_query"]) if mapping.get("numerator_query") else None
         den = await sipp_mod.run_scalar(cfg, mapping["denominator_query"]) if mapping.get("denominator_query") else None
     except ValueError as e:
         raise HTTPException(400, str(e))
     except Exception as e:
-        raise HTTPException(400, f"Gagal menjalankan query SIPP: {str(e)}")
-
-    existing = await db.indicator_data.find_one({"indicator_id": body.indicator_id, "period_id": body.period_id})
-    entry_patch = {
-        "numerator": {"value": num, "definition": ind.get("numerator_definition"), "source": "SIPP", "input_date": now_iso()[:10]},
-        "denominator": {"value": den, "definition": ind.get("denominator_definition"), "source": "SIPP", "input_date": now_iso()[:10]},
-        "updated_at": now_iso(), "updated_by": f"{user['name']} (SIPP)",
-    }
-    if existing:
-        await db.indicator_data.update_one({"id": existing["id"]}, {"$set": entry_patch})
-        entry_id = existing["id"]
-    else:
-        entry_id = new_id()
-        await db.indicator_data.insert_one({"id": entry_id, "indicator_id": body.indicator_id,
-            "period_id": body.period_id, "status": "draft", "workflow_history": [],
-            "created_by": f"{user['name']} (SIPP)", "created_at": now_iso(), **entry_patch})
-    await log_audit(user, "UPDATE", "Sumber Data", entry_id, None,
-                    {"source": "SIPP", "numerator": num, "denominator": den}, client_ip(request))
+        raise HTTPException(400, _conn_error_message(e))
+    entry_id = await _store_pull(body.indicator_id, body.period_id, num, den, user, request, "SIPP")
     return {"ok": True, "entry_id": entry_id, "numerator": num, "denominator": den}
+
+
+@api.post("/sipp/pull-values")
+async def sipp_pull_values(body: SippPullValuesReq, request: Request,
+                           user: dict = Depends(require_roles(SUPER_ADMIN, ADMIN))):
+    """Store SIPP values queried by the DESKTOP app (direct LAN connection)."""
+    entry_id = await _store_pull(body.indicator_id, body.period_id, body.numerator,
+                                 body.denominator, user, request, "SIPP (desktop)")
+    return {"ok": True, "entry_id": entry_id, "numerator": body.numerator, "denominator": body.denominator}
 
 
 # ---------------- Supporting Documents ----------------

@@ -1,0 +1,28 @@
+{
+  "summary": "Iteration 3 validated the SIPP desktop-bridge feature set: improved Indonesian error message on POST /api/sipp/test-connection (contains error code 2003 + actionable guidance about desktop app / bind-address / firewall / internal IP), new admin-only endpoint GET /api/sipp/connection/full (returns host/port/database/username/password, viewer gets 403), new POST /api/sipp/pull-values that persists numerator/denominator with source 'SIPP (desktop)' verified via GET /api/data-entries/one, RBAC 403 for viewer, 400 'Periode terkunci' for admin_operator on Locked 2024 period, 404 on bad indicator_id. Regressions verified: POST /api/sipp/pull returns 400 'belum diatur' with no mapping and 400 'baca-saja' for non-SELECT queries, GET /api/download/windows serves the 111MB ZIP as attachment application/zip, login + dashboard + indicators list + data-entries save + calculate still function for a percentage indicator. Desktop code statically verified: /app/desktop/main.js exposes ipcMain handlers 'sipp:test' and 'sipp:query' using mysql2/promise with SELECT-only validateSippQuery(), /app/desktop/preload.js exposes window.kintrack.sippTest/sippQuery via contextBridge, /app/desktop/package.json has mysql2@3.11.4 in dependencies. In-browser Playwright confirmed window.kintrack is undefined (graceful fallback to backend), Sumber Data 'Uji Koneksi' hit backend and status banner shows 'root@10.10.0.2:3306/sipp FAILED', Input Data page loads cleanly (pull-sipp-button conditionally rendered only after indicator+period selected — previously verified in iter2). No console/page errors. 12/12 new pytest cases pass + 4/4 relevant iter2 regressions pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_sipp_desktop_bridge.py",
+    "/app/backend/tests/test_sipp_and_documents.py",
+    "/app/test_reports/pytest/pytest_iter3.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py now ~1080 lines — still growing; strongly recommend router modularization (auth/indicators/data/sipp/documents/dashboard/users).",
+    "GET /api/sipp/connection/full returns the plaintext password to any admin/super_admin. This is required for the desktop LAN bridge design but is a sensitive endpoint — ensure HTTPS only (already enforced by ingress) and consider adding audit-log entry on each access + rate limiting.",
+    "_conn_error_message() heuristic matches strings like '2003' anywhere in the exception message — if a MariaDB error message happens to contain '2003' unrelated to unreachable host it could mis-map. Low risk in practice; consider matching aiomysql/pymysql errno attribute explicitly.",
+    "_store_pull uses `if period.status == 'Locked' and user['role'] != SUPER_ADMIN` — correct, but there is no similar lock check inside POST /api/sipp/pull-values for non-super-admin/admin_operator roles because require_roles already limits to those two. Documented — no fix needed.",
+    "pull-values does not validate numeric ranges (accepts negative numerator/denominator, zero denominator, or extremely large numbers). Frontend calculate handles zero denominator (via compute), but consider server-side sanity checks."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sipp_desktop_bridge.py (new — 12 tests, all pass)"
+  ],
+  "success_rate": {"backend": "100% (12/12 new + regressions pass)", "frontend": "100% (Sumber Data test-connection + Input Data render, no console errors, window.kintrack correctly undefined in browser)"},
+  "test_credentials": "super_admin: putrifebriany221@gmail.com / Kintrack@2026. Test users created per-run: test_viewer_it3_<ts>@example.com / ViewerPass1!, test_admin_it3_<ts>@example.com / AdminPass1! (admin_operator role).",
+  "seed_data_creation": "Created one indicator_data entry via POST /api/sipp/pull-values for indicator 1.1 in the 2026 Open period (numerator=42, denominator=100, source='SIPP (desktop)') — left in place to demonstrate feature per user's note. Later overwritten by test_data_entry_save_and_calculate with numerator=50/denominator=200 (source MANUAL, result≈25%). Existing SIPP config (host=10.10.0.2, port=3306, database=sipp, username=root) intentionally preserved.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Route names differ from external docs: use /api/periods (not /reporting-periods), /api/dashboard (not /dashboard/summary), /api/mappings (not /data-source-mappings). Admin role literal is 'admin_operator' (not 'admin'). Calculate endpoint returns 'result' key (not 'value' or 'computed_value'). window.kintrack is undefined in plain browser — SumberData.testConn() and InputData.pullSipp() correctly fall back to backend. Pytest must run with -n 0 (xdist LoadScope breaks class-level shared attrs). New test file: /app/backend/tests/test_sipp_desktop_bridge.py.",
+  "rca of the issue": "N/A — no bugs. Test suite fully green."
+}
