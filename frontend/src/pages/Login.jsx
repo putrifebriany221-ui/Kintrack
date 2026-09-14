@@ -111,6 +111,19 @@ export default function Login() {
               Masuk
             </Button>
           </form>
+
+          <div className="mt-6 border-t border-slate-200 pt-4 text-center dark:border-slate-800">
+            <a
+              href={`${process.env.REACT_APP_BACKEND_URL}/api/download/windows`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 text-xs font-semibold text-[#0F4C3A] hover:underline dark:text-emerald-400"
+              data-testid="download-windows-login-link"
+            >
+              <Scale className="h-4 w-4 text-amber-500" />
+              Unduh Aplikasi Desktop Windows 11 (Portable .exe / Zip)
+            </a>
+          </div>
         </div>
       </div>
     </div>

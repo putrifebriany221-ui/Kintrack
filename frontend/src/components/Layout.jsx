@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import {
   LayoutDashboard, Target, FileSpreadsheet, Calculator, UserCheck, Calendar,
-  Database, Printer, History, Users, Settings, LogOut, Menu, X, Scale,
+  Database, Printer, History, Users, Settings, LogOut, Menu, X, Scale, Download,
 } from "lucide-react";
 import { useAuth, ROLES } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,15 @@ export default function Layout({ children }) {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <a
+              href={`${process.env.REACT_APP_BACKEND_URL}/api/download/windows`}
+              target="_blank"
+              rel="noreferrer"
+              className="hidden items-center gap-1.5 rounded bg-amber-500 px-2.5 py-1 text-xs font-bold text-slate-950 transition hover:bg-amber-400 sm:flex"
+              data-testid="download-windows-topbar-btn"
+            >
+              <Download className="h-3.5 w-3.5" /> Unduh Windows App
+            </a>
             <div className="hidden text-right sm:block">
               <div className="text-sm font-semibold">{user?.name}</div>
               <div className="text-[11px] text-emerald-100/80">{ROLES[user?.role] || user?.role}</div>

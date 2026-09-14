@@ -6,7 +6,7 @@ import os
 import logging
 from typing import Optional, List
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, UploadFile, File, Header, Query, Form
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
 
@@ -143,6 +143,20 @@ class BusinessRuleReq(BaseModel):
     active: bool = True
 
 
+# ---------------- Public Windows App Download ----------------
+@api.api_route("/download/windows", methods=["GET", "HEAD"])
+async def download_windows_app():
+    zip_path = "/app/KINTRACK-Windows-x64.zip"
+    if not os.path.exists(zip_path):
+        raise HTTPException(status_code=404, detail="Berkas instalasi Windows belum tersedia.")
+    return FileResponse(
+        path=zip_path,
+        filename="KINTRACK-Windows-x64.zip",
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="KINTRACK-Windows-x64.zip"'}
+    )
+
+
 # ---------------- Auth ----------------
 @api.post("/auth/login")
 async def login(body: LoginReq, request: Request):
@@ -153,10 +167,10 @@ async def login(body: LoginReq, request: Request):
     if not user.get("active", True):
         raise HTTPException(status_code=403, detail="Akun dinonaktifkan")
     token = create_access_token(user["id"], user["email"], user["role"])
-    clean(user)
-    user.pop("password_hash", None)
-    await log_audit(user, "LOGIN", "Auth", user["id"], ip=client_ip(request))
-    return {"access_token": token, "token_type": "bearer", "user": user}
+    clean_user = clean(user)
+    clean_user.pop("password_hash", None)
+    await log_audit(clean_user, "LOGIN", "Auth", clean_user["id"], ip=client_ip(request))
+    return {"access_token": token, "token_type": "bearer", "user": clean_user}
 
 
 @api.get("/auth/me")
