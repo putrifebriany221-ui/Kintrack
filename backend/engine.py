@@ -1,6 +1,7 @@
 """Configurable calculation engine. Formulas are NOT hard-coded per indicator;
 behaviour is driven by the indicator's `calculation_type` and its stored config."""
 from typing import Optional
+from formula import safe_eval, FormulaError
 
 
 def _to_num(v):
@@ -27,8 +28,13 @@ def compute(indicator: dict, data: dict) -> dict:
         if den is None or num is None:
             note = "Data pembilang/penyebut belum lengkap"
         elif den == 0:
-            note = "Penyebut = 0, tidak dapat dihitung (N/A)"
-            result = None
+            zb = (indicator.get("zero_denominator_behavior") or "na").lower()
+            if zb == "zero":
+                result = 0
+                note = "Penyebut = 0 → hasil 0 (sesuai konfigurasi)"
+            else:
+                result = None
+                note = "Penyebut = 0, tidak dapat dihitung (N/A)"
         else:
             result = round(num / den * (100 if ctype == "percentage" else 1), 2)
 
@@ -76,6 +82,31 @@ def compute(indicator: dict, data: dict) -> dict:
             "manual_index": manual_index,
         }
 
+    elif ctype == "formula":
+        raw = data.get("variables") or {}
+        variables = {}
+        for k, v in raw.items():
+            nv = _to_num(v)
+            if nv is not None:
+                variables[k] = nv
+        formula = indicator.get("formula") or ""
+        breakdown = {"variables": variables, "formula": formula}
+        if not formula:
+            note = "Formula belum dikonfigurasi"
+        else:
+            try:
+                val = safe_eval(formula, variables)
+                prec = int(indicator.get("decimal_precision") or 2)
+                result = round(float(val), prec)
+            except ZeroDivisionError:
+                zb = (indicator.get("zero_denominator_behavior") or "na").lower()
+                result = 0 if zb == "zero" else None
+                note = "Pembagian dengan nol (penyebut = 0)"
+            except FormulaError as e:
+                note = f"Kesalahan formula: {e}"
+            except Exception as e:
+                note = f"Kesalahan perhitungan: {e}"
+
     else:  # manual, count, score
         m = data.get("manual") or {}
         result = _to_num(m.get("value"))
@@ -114,3 +145,28 @@ def compute_gap(result, target):
     if r is None or t is None:
         return None
     return round(r - t, 2)
+
+
+def compute_achievement(realization, target, direction="higher_is_better"):
+    """Achievement % honouring configurable target direction."""
+    r = _to_num(realization)
+    t = _to_num(target)
+    if r is None or t is None or t == 0:
+        return None
+    d = (direction or "higher_is_better").lower()
+    if d == "lower_is_better":
+        if r == 0:
+            return None
+        return round(t / r * 100, 2)
+    if d == "exact_target":
+        return round((1 - abs(r - t) / t) * 100, 2)
+    return round(r / t * 100, 2)  # higher_is_better
+
+
+def evaluate_achievement_status(achievement, threshold=100.0):
+    if achievement is None:
+        return "N/A"
+    th = _to_num(threshold)
+    if th is None:
+        th = 100.0
+    return "TERCAPAI" if achievement >= th else "BELUM TERCAPAI"

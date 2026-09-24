@@ -1,0 +1,23 @@
+[Unit]
+Description=KINTRACK - Sistem Tracking Kinerja PN Sukadana (FastAPI)
+After=network.target mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kintrack
+Group=kintrack
+WorkingDirectory=/opt/kintrack/backend
+EnvironmentFile=/opt/kintrack/backend/.env
+# Bind to loopback only; Apache reverse-proxies /api to it.
+ExecStart=/opt/kintrack/venv/bin/uvicorn server:app --host 127.0.0.1 --port 8001 --workers 2
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/kintrack/backend.log
+StandardError=append:/var/log/kintrack/backend.error.log
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -18,6 +18,7 @@ const TYPES = [
   { v: "Composite Index", c: "composite" }, { v: "Survey Index", c: "survey" },
   { v: "Manual Value", c: "manual" }, { v: "Count", c: "count" },
   { v: "Score", c: "score" }, { v: "Weighted Score", c: "weighted_score" },
+  { v: "Custom Formula", c: "formula" },
 ];
 const OPS = [">=", ">", "=", "<=", "<", "between"];
 const FREQ = ["Bulanan", "Triwulanan", "Semesteran", "Tahunan"];
@@ -29,6 +30,9 @@ const empty = {
   unit: "%", target_value: "", target_operator: ">=", data_source: "Manual",
   active_status: true, reporting_frequency: "Triwulanan", components: [],
   allow_numerator_gt_denominator: false, config_extra: {}, notes: "",
+  target_direction: "higher_is_better", realization_source: "manual", formula: "",
+  variables_def: [], decimal_precision: 2, zero_denominator_behavior: "na",
+  achievement_threshold: 100, allow_override: true,
 };
 
 export default function IndicatorForm({ open, onOpenChange, indicator, categories, onSaved }) {
@@ -163,6 +167,46 @@ export default function IndicatorForm({ open, onOpenChange, indicator, categorie
               </div>
             </div>
             <div><Label>Catatan</Label><Textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} className="mt-1" rows={2} /></div>
+            <div className="grid grid-cols-2 gap-4 rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+              <div>
+                <Label>Sumber Realisasi</Label>
+                <Select value={form.realization_source} onValueChange={(v) => set("realization_source", v)}>
+                  <SelectTrigger className="mt-1" data-testid="form-realization-source"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manual">Manual</SelectItem>
+                    <SelectItem value="sipp">SIPP Otomatis</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Arah Target</Label>
+                <Select value={form.target_direction} onValueChange={(v) => set("target_direction", v)}>
+                  <SelectTrigger className="mt-1" data-testid="form-target-direction"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="higher_is_better">Semakin Tinggi Semakin Baik</SelectItem>
+                    <SelectItem value="lower_is_better">Semakin Rendah Semakin Baik</SelectItem>
+                    <SelectItem value="exact_target">Tepat Sesuai Target</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Perilaku Penyebut = 0</Label>
+                <Select value={form.zero_denominator_behavior} onValueChange={(v) => set("zero_denominator_behavior", v)}>
+                  <SelectTrigger className="mt-1" data-testid="form-zero-denominator"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="na">N/A (tidak dihitung)</SelectItem>
+                    <SelectItem value="zero">Hasil = 0</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>Ambang Capaian (%)</Label><Input type="number" value={form.achievement_threshold} onChange={(e) => set("achievement_threshold", e.target.value)} className="mt-1 font-mono" data-testid="form-threshold" /></div>
+              <div><Label>Presisi Desimal</Label><Input type="number" value={form.decimal_precision} onChange={(e) => set("decimal_precision", e.target.value)} className="mt-1 font-mono" /></div>
+              {form.calculation_type === "formula" && (
+                <div className="col-span-2"><Label>Formula (aman: IF, SUM, AVG, MIN, MAX, ROUND, ABS)</Label>
+                  <Textarea value={form.formula} onChange={(e) => set("formula", e.target.value)} className="mt-1 font-mono text-sm" rows={2} placeholder="IF(total=0, 0, (selesai/total)*100)" data-testid="form-formula-expr" />
+                </div>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <Switch checked={form.active_status} onCheckedChange={(v) => set("active_status", v)} data-testid="form-active" />
               <Label>Indikator Aktif</Label>

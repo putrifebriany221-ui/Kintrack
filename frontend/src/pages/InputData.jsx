@@ -256,6 +256,25 @@ export default function InputData() {
                 </div>
               )}
 
+              {/* FORMULA (variable-driven) */}
+              {ct === "formula" && (
+                <div className="space-y-3 rounded-lg border p-4">
+                  <div className="rounded bg-slate-50 p-2 font-mono text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">{ind.formula || "Formula belum dikonfigurasi di master indikator"}</div>
+                  <Label className="text-sm font-semibold">Nilai Variabel</Label>
+                  {(ind.variables_def && ind.variables_def.length ? ind.variables_def : []).map((vd, i) => (
+                    <div key={i} className="grid grid-cols-2 items-center gap-2">
+                      <Label className="font-mono text-sm">{vd.name}</Label>
+                      <Input type="number" data-testid={`var-${vd.name}`} value={form.variables?.[vd.name] ?? ""}
+                        onChange={(e) => setForm((f) => ({ ...f, variables: { ...(f.variables || {}), [vd.name]: e.target.value } }))}
+                        className="font-mono" />
+                    </div>
+                  ))}
+                  {(!ind.variables_def || !ind.variables_def.length) && (
+                    <p className="text-xs text-amber-600">Belum ada definisi variabel pada master indikator.</p>
+                  )}
+                </div>
+              )}
+
               {canEdit(user) && (
                 <div className="flex flex-wrap gap-2 pt-2">
                   <Button onClick={save} disabled={saving} variant="outline" data-testid="input-data-save-button"><Save className="mr-1 h-4 w-4" /> Simpan Draft</Button>
@@ -272,12 +291,13 @@ export default function InputData() {
           {calc && (
             <Card className="mt-4 border-l-4 border-l-emerald-600">
               <CardHeader className="pb-2"><CardTitle className="text-base">Hasil Perhitungan</CardTitle></CardHeader>
-              <CardContent className="grid gap-4 sm:grid-cols-4">
-                <div><div className="text-xs uppercase text-slate-400">Hasil</div><div className="font-mono text-2xl font-bold text-[#0F4C3A]">{calc.result != null ? calc.result : "N/A"}{ind.unit === "%" ? "%" : ""}</div></div>
+              <CardContent className="grid gap-4 sm:grid-cols-5">
+                <div><div className="text-xs uppercase text-slate-400">Realisasi</div><div className="font-mono text-2xl font-bold text-[#0F4C3A]">{calc.result != null ? calc.result : "N/A"}{ind.unit === "%" ? "%" : ""}</div></div>
                 <div><div className="text-xs uppercase text-slate-400">Target</div><div className="font-mono text-2xl font-bold">{calc.target ?? "-"}</div></div>
+                <div><div className="text-xs uppercase text-slate-400">Capaian</div><div className="font-mono text-2xl font-bold text-amber-600" data-testid="calc-achievement">{calc.achievement != null ? `${calc.achievement}%` : "-"}</div></div>
                 <div><div className="text-xs uppercase text-slate-400">Gap</div><div className="font-mono text-2xl font-bold">{calc.gap != null ? calc.gap : "-"}</div></div>
-                <div><div className="text-xs uppercase text-slate-400">Status</div><div className="mt-1"><StatusBadge status={calc.status} /></div></div>
-                {calc.note && <div className="sm:col-span-4 text-sm text-amber-600">{calc.note}</div>}
+                <div><div className="text-xs uppercase text-slate-400">Status</div><div className="mt-1"><StatusBadge status={calc.achievement_status || calc.status} /></div></div>
+                {calc.note && <div className="sm:col-span-5 text-sm text-amber-600">{calc.note}</div>}
               </CardContent>
             </Card>
           )}

@@ -18,7 +18,7 @@ from auth import (
     require_roles, can_edit, client_ip, ROLE_LABELS,
     SUPER_ADMIN, ADMIN, OFFICER, VIEWER,
 )
-from engine import compute, evaluate_status, compute_gap
+from engine import compute, evaluate_status, compute_gap, compute_achievement, evaluate_achievement_status
 from seed_data import seed_all
 
 logging.basicConfig(level=logging.INFO)
@@ -84,6 +84,14 @@ class IndicatorReq(BaseModel):
     allow_numerator_gt_denominator: bool = False
     config_extra: dict = {}
     notes: Optional[str] = ""
+    target_direction: Optional[str] = "higher_is_better"
+    realization_source: Optional[str] = "manual"
+    formula: Optional[str] = ""
+    variables_def: List[dict] = []
+    decimal_precision: Optional[int] = 2
+    zero_denominator_behavior: Optional[str] = "na"
+    achievement_threshold: Optional[float] = 100
+    allow_override: bool = True
 
 
 class DataEntryReq(BaseModel):
@@ -94,6 +102,7 @@ class DataEntryReq(BaseModel):
     components: Optional[List[dict]] = None
     survey: Optional[dict] = None
     manual: Optional[dict] = None
+    variables: Optional[dict] = None
     adjustment: Optional[float] = None
     documents: Optional[List[dict]] = None
     notes: Optional[str] = ""
@@ -493,6 +502,34 @@ async def save_entry(body: DataEntryReq, request: Request, user: dict = Depends(
     return {"ok": True, "id": entry_id}
 
 
+async def _build_calc(ind, entry, period, user, extra=None):
+    rm = compute(ind, entry)
+    direction = ind.get("target_direction", "higher_is_better")
+    status = evaluate_status(rm["result"], ind.get("target_value"), ind.get("target_operator"))
+    gap = compute_gap(rm["result"], ind.get("target_value"))
+    achievement = compute_achievement(rm["result"], ind.get("target_value"), direction)
+    ach_status = evaluate_achievement_status(achievement, ind.get("achievement_threshold", 100))
+    active_ver = await db.indicator_formula_versions.find_one({"indicator_id": ind["id"], "active_status": True})
+    calc = {
+        "id": new_id(), "indicator_id": ind["id"], "indicator_code": ind["indicator_code"],
+        "indicator_name": ind["indicator_name"], "period_id": entry["period_id"],
+        "period_name": period.get("period_name") if period else "", "year": period.get("year") if period else None,
+        "data_id": entry["id"], "formula_version_id": active_ver["id"] if active_ver else None,
+        "formula_version_number": active_ver["version_number"] if active_ver else 1,
+        "formula_description": ind.get("formula") or ind.get("formula_description"),
+        "calculation_type": rm["calculation_type"], "inputs": rm["breakdown"],
+        "result": rm["result"], "realization": rm["result"], "note": rm["note"],
+        "target": ind.get("target_value"), "target_operator": ind.get("target_operator"),
+        "target_direction": direction, "gap": gap, "status": status,
+        "achievement": achievement, "achievement_status": ach_status,
+        "unit": ind.get("unit"), "source": "SIPP" if (ind.get("realization_source") == "sipp") else "MANUAL",
+        "is_override": False, "calculated_by": user["name"], "calculated_at": now_iso(),
+    }
+    if extra:
+        calc.update(extra)
+    return calc
+
+
 @api.post("/data-entries/{entry_id}/calculate")
 async def calculate_entry(entry_id: str, request: Request, user: dict = Depends(get_current_user)):
     if not can_edit(user):
@@ -502,57 +539,90 @@ async def calculate_entry(entry_id: str, request: Request, user: dict = Depends(
         raise HTTPException(404, "Data tidak ditemukan")
     ind = await db.indicators.find_one({"id": entry["indicator_id"]})
     period = await db.reporting_periods.find_one({"id": entry["period_id"]})
-    result_meta = compute(ind, entry)
-    status = evaluate_status(result_meta["result"], ind.get("target_value"), ind.get("target_operator"))
-    gap = compute_gap(result_meta["result"], ind.get("target_value"))
-    active_ver = await db.indicator_formula_versions.find_one({"indicator_id": ind["id"], "active_status": True})
-    calc = {
-        "id": new_id(), "indicator_id": ind["id"], "indicator_code": ind["indicator_code"],
-        "indicator_name": ind["indicator_name"], "period_id": entry["period_id"],
-        "period_name": period.get("period_name") if period else "", "year": period.get("year") if period else None,
-        "data_id": entry_id, "formula_version_id": active_ver["id"] if active_ver else None,
-        "formula_version_number": active_ver["version_number"] if active_ver else 1,
-        "formula_description": ind.get("formula_description"),
-        "calculation_type": result_meta["calculation_type"], "inputs": result_meta["breakdown"],
-        "result": result_meta["result"], "note": result_meta["note"],
-        "target": ind.get("target_value"), "target_operator": ind.get("target_operator"),
-        "gap": gap, "status": status, "unit": ind.get("unit"),
-        "calculated_by": user["name"], "calculated_at": now_iso(),
-    }
+    calc = await _build_calc(ind, entry, period, user)
     await db.indicator_calculations.insert_one(dict(calc))
     await log_audit(user, "CALCULATE", "Perhitungan", calc["id"], None,
-                    {"indicator": ind["indicator_code"], "result": result_meta["result"]}, client_ip(request))
+                    {"indicator": ind["indicator_code"], "result": calc["result"]}, client_ip(request))
     return clean(calc)
 
 
 @api.post("/recalculate-all")
 async def recalculate_all(request: Request, period_id: str, user: dict = Depends(require_roles(SUPER_ADMIN, ADMIN))):
     entries = await db.indicator_data.find({"period_id": period_id}).to_list(500)
-    count = 0
+    period = await db.reporting_periods.find_one({"id": period_id})
+    count, errors = 0, 0
     for entry in entries:
-        ind = await db.indicators.find_one({"id": entry["indicator_id"]})
-        if not ind:
-            continue
-        period = await db.reporting_periods.find_one({"id": period_id})
-        rm = compute(ind, entry)
-        status = evaluate_status(rm["result"], ind.get("target_value"), ind.get("target_operator"))
-        gap = compute_gap(rm["result"], ind.get("target_value"))
-        active_ver = await db.indicator_formula_versions.find_one({"indicator_id": ind["id"], "active_status": True})
-        await db.indicator_calculations.insert_one({
-            "id": new_id(), "indicator_id": ind["id"], "indicator_code": ind["indicator_code"],
-            "indicator_name": ind["indicator_name"], "period_id": period_id,
-            "period_name": period.get("period_name") if period else "", "year": period.get("year") if period else None,
-            "data_id": entry["id"], "formula_version_id": active_ver["id"] if active_ver else None,
-            "formula_version_number": active_ver["version_number"] if active_ver else 1,
-            "formula_description": ind.get("formula_description"), "calculation_type": rm["calculation_type"],
-            "inputs": rm["breakdown"], "result": rm["result"], "note": rm["note"],
-            "target": ind.get("target_value"), "target_operator": ind.get("target_operator"),
-            "gap": gap, "status": status, "unit": ind.get("unit"),
-            "calculated_by": user["name"], "calculated_at": now_iso(),
-        })
-        count += 1
-    await log_audit(user, "CALCULATE", "Perhitungan", period_id, None, {"recalculated": count}, client_ip(request))
-    return {"ok": True, "count": count}
+        # Error isolation: one failing indicator must not stop the others.
+        try:
+            ind = await db.indicators.find_one({"id": entry["indicator_id"]})
+            if not ind:
+                continue
+            calc = await _build_calc(ind, entry, period, user)
+            await db.indicator_calculations.insert_one(dict(calc))
+            count += 1
+        except Exception as e:
+            errors += 1
+            logger.error(f"Recalc error for entry {entry.get('id')}: {e}")
+            try:
+                await db.indicator_calculations.insert_one({
+                    "id": new_id(), "indicator_id": entry.get("indicator_id"), "period_id": period_id,
+                    "period_name": period.get("period_name") if period else "",
+                    "year": period.get("year") if period else None, "data_id": entry.get("id"),
+                    "result": None, "status": "ERROR", "achievement_status": "ERROR",
+                    "note": f"Kesalahan perhitungan: {e}", "calculated_by": user["name"],
+                    "calculated_at": now_iso(),
+                })
+            except Exception:
+                pass
+    await log_audit(user, "CALCULATE", "Perhitungan", period_id, None,
+                    {"recalculated": count, "errors": errors}, client_ip(request))
+    return {"ok": True, "count": count, "errors": errors}
+
+
+@api.post("/calculations/override")
+async def override_calculation(body: dict, request: Request, user: dict = Depends(require_roles(SUPER_ADMIN, ADMIN))):
+    indicator_id = body.get("indicator_id")
+    period_id = body.get("period_id")
+    value = body.get("value")
+    reason = (body.get("reason") or "").strip()
+    if value is None or not reason:
+        raise HTTPException(400, "Nilai override dan alasan wajib diisi")
+    ind = await db.indicators.find_one({"id": indicator_id})
+    period = await db.reporting_periods.find_one({"id": period_id})
+    if not ind or not period:
+        raise HTTPException(404, "Indikator/periode tidak ditemukan")
+    if not ind.get("allow_override", True) and user["role"] != SUPER_ADMIN:
+        raise HTTPException(403, "Override tidak diizinkan untuk indikator ini")
+    latest = await db.indicator_calculations.find({"indicator_id": indicator_id, "period_id": period_id}).sort("calculated_at", -1).to_list(1)
+    original = latest[0].get("result") if latest else None
+    try:
+        val = float(value)
+    except (ValueError, TypeError):
+        raise HTTPException(400, "Nilai override tidak valid")
+    direction = ind.get("target_direction", "higher_is_better")
+    achievement = compute_achievement(val, ind.get("target_value"), direction)
+    calc = {
+        "id": new_id(), "indicator_id": indicator_id, "indicator_code": ind["indicator_code"],
+        "indicator_name": ind["indicator_name"], "period_id": period_id,
+        "period_name": period.get("period_name"), "year": period.get("year"),
+        "data_id": latest[0].get("data_id") if latest else None,
+        "formula_description": ind.get("formula") or ind.get("formula_description"),
+        "calculation_type": ind.get("calculation_type"), "inputs": {"override": True},
+        "result": round(val, int(ind.get("decimal_precision") or 2)), "realization": val,
+        "note": f"Override manual. Alasan: {reason}",
+        "target": ind.get("target_value"), "target_operator": ind.get("target_operator"),
+        "target_direction": direction, "gap": compute_gap(val, ind.get("target_value")),
+        "status": evaluate_status(val, ind.get("target_value"), ind.get("target_operator")),
+        "achievement": achievement,
+        "achievement_status": evaluate_achievement_status(achievement, ind.get("achievement_threshold", 100)),
+        "unit": ind.get("unit"), "source": "OVERRIDE", "is_override": True,
+        "override_reason": reason, "original_result": original,
+        "calculated_by": user["name"], "calculated_at": now_iso(),
+    }
+    await db.indicator_calculations.insert_one(dict(calc))
+    await log_audit(user, "UPDATE", "Override Perhitungan", calc["id"],
+                    {"original": original}, {"override": val, "reason": reason}, client_ip(request))
+    return clean(calc)
 
 
 @api.get("/calculations")
@@ -1049,6 +1119,28 @@ async def update_settings(body: dict, request: Request, user: dict = Depends(req
 @api.get("/")
 async def root():
     return {"app": "KINTRACK API", "status": "ok"}
+
+
+@api.api_route("/health", methods=["GET"])
+async def health():
+    import time as _t
+    app_ver = "1.0.0"
+    db_status = "ok"
+    try:
+        await db.command("ping")
+    except Exception as e:
+        db_status = f"error: {e}"
+    sipp_cfg = await db.system_settings.find_one({"key": "sipp_connection"})
+    if not sipp_cfg:
+        sipp_status = "not_configured"
+    else:
+        sipp_status = (sipp_cfg.get("last_status") or "unknown").lower()
+    overall = "ok" if db_status == "ok" else "degraded"
+    return {
+        "application": overall, "database": db_status,
+        "sipp": sipp_status, "version": app_ver,
+        "server_time": now_iso(),
+    }
 
 
 app.include_router(api)

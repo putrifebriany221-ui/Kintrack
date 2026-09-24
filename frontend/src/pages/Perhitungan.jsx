@@ -46,23 +46,24 @@ export default function Perhitungan() {
           <TableHeader><TableRow>
             <TableHead>Kode</TableHead><TableHead>Indikator</TableHead><TableHead className="text-right">Pembilang</TableHead>
             <TableHead className="text-right">Penyebut</TableHead><TableHead className="text-right">Hasil</TableHead>
-            <TableHead className="text-right">Target</TableHead><TableHead className="text-right">Gap</TableHead>
+            <TableHead className="text-right">Target</TableHead><TableHead className="text-right">Capaian</TableHead><TableHead className="text-right">Gap</TableHead>
             <TableHead className="text-center">Status</TableHead><TableHead>Dihitung</TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {calcs.length ? calcs.map((c, i) => (
               <TableRow key={c.id} data-testid={`calc-row-${i}`}>
                 <TableCell className="font-mono font-semibold text-[#0F4C3A]">{c.indicator_code}</TableCell>
-                <TableCell className="max-w-[300px]">{c.indicator_name}</TableCell>
+                <TableCell className="max-w-[300px]">{c.indicator_name}{c.is_override && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-bold text-amber-700">OVERRIDE</span>}</TableCell>
                 <TableCell className="text-right font-mono">{c.inputs?.numerator ?? "-"}</TableCell>
                 <TableCell className="text-right font-mono">{c.inputs?.denominator ?? "-"}</TableCell>
                 <TableCell className="text-right font-mono font-bold">{c.result != null ? c.result : "N/A"}</TableCell>
                 <TableCell className="text-right font-mono">{c.target ?? "-"}</TableCell>
+                <TableCell className="text-right font-mono text-amber-600">{c.achievement != null ? `${c.achievement}%` : "-"}</TableCell>
                 <TableCell className="text-right font-mono">{c.gap != null ? c.gap : "-"}</TableCell>
-                <TableCell className="text-center"><StatusBadge status={c.status} /></TableCell>
+                <TableCell className="text-center"><StatusBadge status={c.achievement_status || c.status} /></TableCell>
                 <TableCell className="text-xs text-slate-500">{c.calculated_by}</TableCell>
               </TableRow>
-            )) : <TableRow><TableCell colSpan={9} className="py-10 text-center text-slate-400">Belum ada perhitungan untuk periode ini. Input data lalu hitung.</TableCell></TableRow>}
+            )) : <TableRow><TableCell colSpan={10} className="py-10 text-center text-slate-400">Belum ada perhitungan untuk periode ini. Input data lalu hitung.</TableCell></TableRow>}
           </TableBody>
         </Table>
       </div></CardContent></Card>

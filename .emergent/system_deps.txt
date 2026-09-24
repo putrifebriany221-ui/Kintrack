@@ -1,4 +1,3 @@
-cron=3.0pl1-162
 imagemagick=8:6.9.11.60+dfsg-1.6+deb12u13
 wine=8.0~repack-4
 wine64=8.0~repack-4
