@@ -34,6 +34,14 @@ Production-ready web application for an Indonesian court institution (Pengadilan
 - Full CRUD + calculation + workflow + audit + RBAC verified
 - Professional Indonesian government UI (emerald/amber, Plus Jakarta Sans)
 
+## Implemented (2026-09-24) — Automatic Calculation Engine (iteration_4, 100% pass, 17/17)
+- **Safe formula engine** (`formula.py`, AST allow-list): types IF/SUM/AVG/MIN/MAX/ROUND/ABS, lazy IF (zero-guard), `=`→`==`, no code execution. calculation_type `formula` with variables_def.
+- **Target direction** (higher/lower/exact) + **achievement %** + configurable **achievement_threshold** → status TERCAPAI/BELUM TERCAPAI, computed BACKEND-side and stored on each calc record (achievement, achievement_status, realization, target_direction).
+- **Zero-denominator behavior** configurable (na/zero). **Manual override** (`/api/calculations/override`) preserves original (latest non-override) + reason + audit; history append-only. **recalculate-all** with per-indicator error isolation ({count, errors}). **`/api/health`**.
+- Indicator config extended (target_direction, realization_source, formula, variables_def, decimal_precision, zero_denominator_behavior, achievement_threshold, allow_override) — existing indicators default gracefully.
+- Frontend: IndicatorForm 'Lanjutan' config, InputData formula variables + Capaian card, Perhitungan Capaian column + OVERRIDE tag.
+- **Production deployment artifacts**: `deploy/DEPLOYMENT.md` (Apache+systemd+MariaDB), `deploy/sukadana-kinerja.service`, `deploy/apache-kintrack.conf`, `backend/.env.example` — self-hosted, independent of Emergent.
+
 ## Implemented (2026-09-14) — SIPP LAN fix + Desktop direct connection (iteration_3, 100% pass)
 - **Bug fix (user report: error 2003 to 10.0.x.x)**: root cause = cloud backend cannot reach private LAN IPs. Fix: desktop app (Electron) now connects DIRECTLY to SIPP from the user's LAN machine via IPC + mysql2 (`main.js` handlers `sipp:test`/`sipp:query`, SELECT-only enforced; exposed via `preload.js` as `window.kintrack`). Browser falls back to backend gracefully.
 - New backend endpoints: `GET /api/sipp/connection/full` (admin-only, full config for desktop client), `POST /api/sipp/pull-values` (stores values queried by desktop app). Clear Indonesian error messages for 2003/2013/1045/1049.

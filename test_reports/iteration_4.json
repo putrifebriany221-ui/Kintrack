@@ -1,0 +1,26 @@
+{
+  "summary": "Iteration 4 validated the Automatic Indicator Calculation Engine extension. Backend: 17/17 new pytest cases PASS in /app/backend/tests/test_calc_engine.py covering: safe formula engine (IF() zero-guard giving 95.0 and 0 for zero-denominator; bad formula returns 'Kesalahan formula' note not 500); all calc types (percentage 95.0, manual 77.0, composite 85.0); target_direction higher_is_better (achievement 105.56, TERCAPAI), lower_is_better (125.0, TERCAPAI), exact_target (95.0, BELUM TERCAPAI); achievement_threshold configurable (threshold=80 → 95% becomes TERCAPAI); manual override by super_admin preserves original_result, requires reason (400 without), viewer 403; recalculate-all returns {count, errors}; history retains both automatic and override records; GET /api/health returns {application, database:'ok', sipp, version, server_time}; POST/PUT /api/indicators persists all new fields (target_direction, realization_source, formula, variables_def, decimal_precision, zero_denominator_behavior, achievement_threshold, allow_override) and GET returns them. Frontend: login → dashboard OK; IndicatorForm 'Lanjutan' tab shows form-realization-source, form-target-direction, form-zero-denominator, form-threshold (all visible); Perhitungan page renders 'Capaian' column with values (106.25%, 96.25%, 125%, 105.56%, etc.), correct achievement_status badges (TERCAPAI / BELUM TERCAPAI / N/A). Zero console errors during the whole flow. No backend or frontend issues found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_calc_engine.py",
+    "/app/test_reports/pytest/pytest_iter4.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 1172 lines — modularization into routers (auth/indicators/data/calc/sipp/health/users) is overdue.",
+    "In /api/calculations/override, `original_result` is taken from the most-recent calc even if that most-recent record is itself an override — chaining overrides may lose the true original automatic value. Consider filtering to the latest non-override calc when populating original_result.",
+    "Health endpoint reports `sipp` from cached `last_status` field in system_settings; it is not a live probe. Acceptable for MVP but rename to `sipp_last_status` or perform a lightweight live check for accuracy.",
+    "compute_achievement returns None for target=0 and for lower_is_better with realization=0. Silent None flows through to N/A — fine, but a clearer note in the calculation record would help UI (currently just shows N/A)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_calc_engine.py (new — 17 tests, all pass)"
+  ],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "100% (all testids present, no console errors)"},
+  "test_credentials": "super_admin: putrifebriany221@gmail.com / Kintrack@2026. Viewer created per-run (test_viewer_it4_<ts>@example.com / Viewer@1234) and cleaned up.",
+  "seed_data_creation": "Created several TEST_F* formula indicators (PERSIST, F95, FZ, FBAD, FL, FE, FTH) and matching data entries in the current Open period to demonstrate formula engine + achievement % + threshold behavior. Left in place — visible on Perhitungan page. 1.1 percentage indicator was overridden then recalculated during recalculate-all (override is preserved in /history but not the latest record).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New engine fields on calculation records: achievement, achievement_status, realization, target_direction, is_override, override_reason, original_result. Override endpoint: POST /api/calculations/override {indicator_id, period_id, value, reason} — reason required. Health: GET /api/health (public). Formula engine: 'IF(a=0,x,y)' short-circuits (single = normalized to ==). Recalculate-all: POST /api/recalculate-all?period_id=... returns {count, errors}. Existing route facts remain: /api/periods, /api/dashboard, /api/mappings; admin role 'admin_operator'. Run pytest with -n 0.",
+  "rca of the issue": "N/A — all tests green."
+}

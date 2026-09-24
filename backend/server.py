@@ -593,7 +593,7 @@ async def override_calculation(body: dict, request: Request, user: dict = Depend
         raise HTTPException(404, "Indikator/periode tidak ditemukan")
     if not ind.get("allow_override", True) and user["role"] != SUPER_ADMIN:
         raise HTTPException(403, "Override tidak diizinkan untuk indikator ini")
-    latest = await db.indicator_calculations.find({"indicator_id": indicator_id, "period_id": period_id}).sort("calculated_at", -1).to_list(1)
+    latest = await db.indicator_calculations.find({"indicator_id": indicator_id, "period_id": period_id, "is_override": {"$ne": True}}).sort("calculated_at", -1).to_list(1)
     original = latest[0].get("result") if latest else None
     try:
         val = float(value)
