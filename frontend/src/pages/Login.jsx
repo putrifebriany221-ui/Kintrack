@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Scale, Loader2 } from "lucide-react";
-import api, { apiError } from "@/lib/api";
+import { Scale, Loader2, Settings } from "lucide-react";
+import api, { apiError, isDesktop } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,16 +113,28 @@ export default function Login() {
           </form>
 
           <div className="mt-6 border-t border-slate-200 pt-4 text-center dark:border-slate-800">
-            <a
-              href={`${process.env.REACT_APP_BACKEND_URL}/api/download/windows`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 text-xs font-semibold text-[#0F4C3A] hover:underline dark:text-emerald-400"
-              data-testid="download-windows-login-link"
-            >
-              <Scale className="h-4 w-4 text-amber-500" />
-              Unduh Aplikasi Desktop Windows 11 (Portable .exe / Zip)
-            </a>
+            {isDesktop ? (
+              <button
+                type="button"
+                onClick={() => navigate("/pengaturan-server")}
+                className="inline-flex items-center gap-2 text-xs font-semibold text-[#0F4C3A] hover:underline dark:text-emerald-400"
+                data-testid="server-settings-login-link"
+              >
+                <Settings className="h-4 w-4 text-amber-500" />
+                Pengaturan Server
+              </button>
+            ) : (
+              <a
+                href={`${process.env.REACT_APP_BACKEND_URL}/api/download/windows`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 text-xs font-semibold text-[#0F4C3A] hover:underline dark:text-emerald-400"
+                data-testid="download-windows-login-link"
+              >
+                <Scale className="h-4 w-4 text-amber-500" />
+                Unduh Aplikasi Desktop Windows 11 (Portable .exe / Zip)
+              </a>
+            )}
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 {
   "name": "kintrack-desktop",
-  "productName": "KINTRACK",
+  "productName": "Monitoring dan Pelaporan Kinerja PN Sukadana",
   "version": "1.0.0",
   "description": "KINTRACK - Sistem Tracking Kinerja PN Sukadana (Windows Desktop)",
   "author": {
@@ -13,6 +13,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "cross-env KINTRACK_DEV=1 electron .",
+    "build": "node scripts/build-renderer.js",
     "prepare-renderer": "node scripts/copy-renderer.js",
     "make-icon": "node scripts/make-icon.js",
     "dist:win": "npm run prepare-renderer && npm run make-icon && electron-builder --win nsis portable --x64",
@@ -32,7 +33,7 @@
   },
   "build": {
     "appId": "id.go.pn-sukadana.kintrack",
-    "productName": "KINTRACK",
+    "productName": "Monitoring dan Pelaporan Kinerja PN Sukadana",
     "copyright": "Copyright © 2026 Pengadilan Negeri Sukadana",
     "directories": {
       "output": "dist",
@@ -42,6 +43,7 @@
       "main.js",
       "preload.js",
       "static-server.js",
+      "config-store.js",
       "window-state.js",
       "package.json",
       "renderer/**/*"
@@ -64,10 +66,10 @@
       ],
       "icon": "build/icon.ico",
       "executableName": "KINTRACK",
-      "artifactName": "KINTRACK-Setup-${version}.${ext}"
+      "artifactName": "Sukadana-Kinerja-Setup-${version}.${ext}"
     },
     "portable": {
-      "artifactName": "KINTRACK-${version}-portable.${ext}"
+      "artifactName": "Sukadana-Kinerja-${version}-Portable.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -76,10 +78,10 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "KINTRACK",
-      "uninstallDisplayName": "KINTRACK - Sistem Tracking Kinerja PN Sukadana",
+      "shortcutName": "KINTRACK PN Sukadana",
+      "uninstallDisplayName": "Monitoring dan Pelaporan Kinerja PN Sukadana",
       "runAfterFinish": true,
-      "artifactName": "KINTRACK-Setup-${version}.${ext}",
+      "artifactName": "Sukadana-Kinerja-Setup-${version}.${ext}",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico"

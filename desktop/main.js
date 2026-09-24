@@ -13,9 +13,8 @@ log.info(`KINTRACK starting v${app.getVersion()} on ${process.platform}`);
 
 const isDev = process.env.KINTRACK_DEV === "1" || !app.isPackaged;
 const DEV_URL = process.env.KINTRACK_DEV_URL || "http://localhost:3000";
-// Remote backend (HTTPS). The bundled UI reads this from its build-time env; this
-// is used only for a startup connectivity check and to allow-list navigation.
-const BACKEND_ORIGIN = "https://kpi-pengadilan.preview.emergentagent.com";
+const { getApiUrl, setApiUrl, normalizeApiUrl } = require("./config-store");
+const APP_NAME = "Monitoring dan Pelaporan Kinerja PN Sukadana";
 
 let mainWindow = null;
 let server = null;
@@ -42,18 +41,43 @@ if (!gotLock) {
   });
 }
 
-async function checkBackend() {
+async function checkBackend(apiUrl) {
   return new Promise((resolve) => {
     try {
-      const request = net.request({ method: "HEAD", url: BACKEND_ORIGIN + "/api/" });
+      const request = net.request({ method: "GET", url: `${apiUrl}/health` });
       const timer = setTimeout(() => { try { request.abort(); } catch (_) {} resolve(false); }, 6000);
-      request.on("response", () => { clearTimeout(timer); resolve(true); });
+      request.on("response", (res) => { clearTimeout(timer); resolve((res.statusCode || 500) < 500); });
       request.on("error", () => { clearTimeout(timer); resolve(false); });
       request.end();
     } catch (_) {
       resolve(false);
     }
   });
+}
+
+async function showOfflineDialog() {
+  const apiUrl = getApiUrl();
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: "warning",
+      title: "Koneksi Server",
+      message: "Server tidak dapat dihubungi.",
+      detail: `Server: ${apiUrl}\nStatus: Tidak terhubung\n\nPeriksa koneksi jaringan/internet Anda, atau ubah alamat server di Pengaturan.`,
+      buttons: ["Coba Lagi", "Pengaturan", "Abaikan"],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true,
+    });
+    if (response === 0) {
+      const online = await checkBackend(apiUrl);
+      if (!online) await showOfflineDialog();
+    } else if (response === 1) {
+      mainWindow.webContents.send("kintrack:open-settings");
+    }
+  } catch (e) {
+    log.warn("Offline dialog error:", e?.message);
+  }
 }
 
 async function createWindow() {
@@ -99,21 +123,13 @@ async function createWindow() {
     log.info("Serving bundled renderer at", baseUrl);
   }
 
-  // Startup connectivity notice (non-blocking)
-  checkBackend().then((online) => {
+  // Startup connectivity check against the configured server (non-blocking)
+  const apiUrl = getApiUrl();
+  log.info("API server:", apiUrl);
+  checkBackend(apiUrl).then((online) => {
     if (!online) {
-      log.warn("Backend not reachable at startup");
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        dialog.showMessageBox(mainWindow, {
-          type: "warning",
-          title: "Koneksi Server",
-          message: "Tidak dapat terhubung ke server KINTRACK.",
-          detail:
-            "Aplikasi tetap berjalan, namun fitur yang membutuhkan data (login, indikator, laporan) memerlukan koneksi internet ke server.\n\nPeriksa koneksi internet Anda lalu coba lagi.",
-          buttons: ["OK"],
-          noLink: true,
-        });
-      }
+      log.warn("Backend not reachable at startup:", apiUrl);
+      showOfflineDialog();
     }
   });
 
@@ -176,17 +192,21 @@ function buildMenu() {
       label: "Bantuan",
       submenu: [
         {
+          label: "Pengaturan Server",
+          click: () => mainWindow?.webContents.send("kintrack:open-settings"),
+        },
+        {
           label: "Buka Folder Log",
           click: () => shell.openPath(path.dirname(log.transports.file.getFile().path)),
         },
         {
-          label: "Tentang KINTRACK",
+          label: "Tentang Aplikasi",
           click: () => {
             dialog.showMessageBox(mainWindow, {
               type: "info",
-              title: "Tentang KINTRACK",
-              message: "KINTRACK",
-              detail: `Sistem Tracking Kinerja PN Sukadana\nVersi ${app.getVersion()}\n\n© 2026 Pengadilan Negeri Sukadana`,
+              title: "Tentang Aplikasi",
+              message: APP_NAME,
+              detail: `Sistem Monitoring dan Pelaporan Kinerja PN Sukadana\nVersi ${app.getVersion()}\nServer: ${getApiUrl()}\n\n© 2026 Pengadilan Negeri Sukadana`,
               buttons: ["OK"],
               noLink: true,
             });
@@ -199,11 +219,30 @@ function buildMenu() {
 }
 
 ipcMain.handle("app:getInfo", () => ({
+  appName: APP_NAME,
   version: app.getVersion(),
   platform: process.platform,
   userData: app.getPath("userData"),
-  backend: BACKEND_ORIGIN,
+  apiUrl: getApiUrl(),
 }));
+
+ipcMain.handle("config:get-api-url", () => getApiUrl());
+
+ipcMain.handle("config:set-api-url", (_e, url) => {
+  const saved = setApiUrl(url);
+  log.info("API URL updated:", saved);
+  return saved;
+});
+
+ipcMain.handle("config:test-api-url", async (_e, url) => {
+  const t = normalizeApiUrl(url) || getApiUrl();
+  const ok = await checkBackend(t);
+  return ok
+    ? { ok: true, url: t }
+    : { ok: false, url: t, error: "Tidak dapat terhubung (timeout / connection refused / DNS error)" };
+});
+
+ipcMain.handle("app:open-logs", () => shell.openPath(path.dirname(log.transports.file.getFile().path)));
 
 // ---------------- Direct SIPP (MariaDB) access from the LAN desktop app ----------------
 let mysql = null;

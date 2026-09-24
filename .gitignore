@@ -94,3 +94,5 @@ KINTRACK-Windows-x64.zip
 frontend/node_modules/.cache/default-development/1.pack
 frontend/node_modules/.cache/default-development/4.pack
 frontend/node_modules/.cache/default-development/3.pack
+desktop/dist/win-arm64-unpacked/KINTRACK.exe
+frontend/node_modules/.cache/default-development/5.pack

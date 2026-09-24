@@ -1,5 +1,6 @@
 import "@/App.css";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import Layout from "@/components/Layout";
@@ -16,6 +17,19 @@ import Laporan from "@/pages/Laporan";
 import AuditLog from "@/pages/AuditLog";
 import Pengguna from "@/pages/Pengguna";
 import Pengaturan from "@/pages/Pengaturan";
+import ServerSettings from "@/pages/ServerSettings";
+import ServerDown from "@/components/ServerDown";
+
+// Listens for the Electron menu "Pengaturan Server" event.
+function OpenSettingsListener() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (window.kintrack?.onOpenSettings) {
+      return window.kintrack.onOpenSettings(() => navigate("/pengaturan-server"));
+    }
+  }, [navigate]);
+  return null;
+}
 
 function Protected({ children }) {
   const { user, ready } = useAuth();
@@ -33,6 +47,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/pengaturan-server" element={<ServerSettings />} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
       <Route path="/indikator" element={<Protected><Indikator /></Protected>} />
@@ -55,7 +70,9 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <OpenSettingsListener />
         <AppRoutes />
+        <ServerDown />
         <Toaster position="top-right" richColors />
       </BrowserRouter>
     </AuthProvider>
